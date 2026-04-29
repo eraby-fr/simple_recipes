@@ -1,0 +1,54 @@
+{% if recipes %}
+<div class="recipe-grid">
+  {% for recipe in recipes %}
+  <article class="recipe-card">
+    <a href="/recipes/{{ recipe.slug }}" class="card-link">
+      {% if recipe.cover_image_url %}
+      <img
+        src="{{ recipe.cover_image_url }}"
+        alt="{{ recipe.title }}"
+        class="card-cover"
+        loading="lazy"
+      >
+      {% else %}
+      <div class="card-cover card-cover-placeholder" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/></svg>
+      </div>
+      {% endif %}
+
+      <div class="card-body">
+        <h2 class="card-title">{{ recipe.title }}</h2>
+        {% if recipe.summary %}
+        <p class="card-summary">{{ recipe.summary }}</p>
+        {% endif %}
+        <div class="card-footer">
+          {% if recipe.tags %}
+          <div class="tags" aria-label="Tags">
+            {% for t in recipe.tags[:3] %}
+            <span class="tag">{{ t }}</span>
+            {% endfor %}
+            {% if recipe.tags | length > 3 %}
+            <span class="tag tag-more">+{{ recipe.tags | length - 3 }}</span>
+            {% endif %}
+          </div>
+          {% endif %}
+          <small class="card-author">{{ recipe.author_username }}</small>
+        </div>
+      </div>
+    </a>
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="empty-icon" aria-hidden="true"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/></svg>
+  <p class="empty-title">Aucune recette trouvée</p>
+  {% if current_user %}
+  <p>Soyez le premier à partager une recette !</p>
+  <a href="/recipes/new" role="button" class="btn-primary">Créer une recette</a>
+  {% else %}
+  <p>Connectez-vous pour ajouter des recettes.</p>
+  <a href="/login" role="button" class="btn-outline">Se connecter</a>
+  {% endif %}
+</div>
+{% endif %}

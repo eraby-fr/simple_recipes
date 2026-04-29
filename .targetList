@@ -1,0 +1,1 @@
+declare -a targetList=([0]="Platform_Bbp_Device_Xeon" [1]="Platform_Bbp_Device_Snowfish")

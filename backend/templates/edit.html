@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block title %}{% if recipe %}Modifier {{ recipe.title }}{% else %}Nouvelle recette{% endif %} — Simple Recipes{% endblock %}
+
+{% block head %}
+<meta name="robots" content="noindex">
+{% endblock %}
+
+{% block main %}
+<div class="editor-page">
+  <div class="editor-page-header">
+    <h1>{% if recipe %}Modifier la recette{% else %}Nouvelle recette{% endif %}</h1>
+    <a href="{% if recipe %}/recipes/{{ recipe.slug }}{% else %}/{% endif %}" class="btn-outline btn-sm">
+      Annuler
+    </a>
+  </div>
+
+  {% if error %}
+  <div class="alert alert-error" role="alert">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    {{ error }}
+  </div>
+  {% endif %}
+
+  <form
+    action="{% if recipe %}/recipes/{{ recipe.slug }}/edit{% else %}/recipes{% endif %}"
+    method="post"
+    class="recipe-form"
+    id="recipe-form"
+  >
+    <div class="form-grid-meta">
+      <div class="form-group">
+        <label for="title">Titre <span class="required" aria-label="obligatoire">*</span></label>
+        <input
+          type="text"
+          id="title"
+          name="title"
+          required
+          value="{{ recipe.title if recipe else '' }}"
+          placeholder="Nom de la recette"
+          autocomplete="off"
+        >
+      </div>
+
+      <div class="form-group">
+        <label for="summary">Résumé</label>
+        <input
+          type="text"
+          id="summary"
+          name="summary"
+          value="{{ recipe.summary if recipe else '' }}"
+          placeholder="Une courte description de la recette..."
+        >
+      </div>
+
+      <div class="form-group">
+        <label for="tags">Tags</label>
+        <input
+          type="text"
+          id="tags"
+          name="tags"
+          value="{{ recipe.tags | join(', ') if recipe else '' }}"
+          placeholder="végétarien, rapide, dessert..."
+          autocomplete="off"
+        >
+        <small>Séparez les tags par des virgules</small>
+        <div id="tags-preview" class="tags tags-preview"></div>
+      </div>
+    </div>
+
+    <div class="editor-layout" id="editor-layout">
+      <div class="editor-pane">
+        <div class="editor-pane-header">
+          <span>Markdown</span>
+          <div class="editor-toolbar">
+            <button type="button" class="toolbar-btn" onclick="insertMarkdown('**', '**')" title="Gras" aria-label="Gras"><strong>B</strong></button>
+            <button type="button" class="toolbar-btn" onclick="insertMarkdown('*', '*')" title="Italique" aria-label="Italique"><em>I</em></button>
+            <button type="button" class="toolbar-btn" onclick="insertHeading()" title="Titre" aria-label="Titre">H</button>
+            <button type="button" class="toolbar-btn" onclick="insertMarkdown('\n- ', '')" title="Liste" aria-label="Liste">≡</button>
+            <button type="button" class="toolbar-btn" onclick="insertMarkdown('\n1. ', '')" title="Liste numérotée" aria-label="Liste numérotée">1.</button>
+            <span class="toolbar-sep" aria-hidden="true"></span>
+            <button type="button" class="toolbar-btn" id="toggle-preview-btn" onclick="togglePreview()" title="Plein écran éditeur / aperçu" aria-label="Basculer l'aperçu">⇔</button>
+          </div>
+        </div>
+        <textarea
+          id="content"
+          name="content"
+          hx-post="/partials/preview"
+          hx-trigger="input changed delay:600ms"
+          hx-target="#preview-pane"
+          hx-vals='{"slug": "{{ recipe.slug if recipe else "__preview__" }}"}'
+          placeholder="# Ma recette&#10;&#10;## Ingrédients&#10;&#10;- 200g de farine&#10;- 2 œufs&#10;&#10;## Préparation&#10;&#10;1. Préchauffer le four à 180°C&#10;2. ..."
+          aria-label="Contenu de la recette en Markdown"
+        >{{ raw_content | default('') }}</textarea>
+      </div>
+
+      <div class="preview-pane" id="preview-pane" aria-live="polite" aria-label="Aperçu">
+        {% if recipe and content_html %}
+          {{ content_html | safe }}
+        {% else %}
+          <p class="preview-placeholder">L'aperçu apparaîtra ici au fur et à mesure que vous écrivez...</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn-primary btn-lg">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        {% if recipe %}Enregistrer les modifications{% else %}Créer la recette{% endif %}
+      </button>
+    </div>
+  </form>
+
+  {% if recipe %}
+  <section class="images-section" aria-label="Gestion des images">
+    <h2>Images</h2>
+    <p class="images-hint">
+      Uploadez des images puis copiez le lien Markdown pour les insérer dans votre recette.
+      Exemple : <code>![Description](images/photo.jpg)</code>
+    </p>
+
+    <div id="image-list">
+      {% with slug = recipe.slug %}
+      {% include "partials/image_list.html" %}
+      {% endwith %}
+    </div>
+
+    <form
+      id="upload-form"
+      hx-post="/recipes/{{ recipe.slug }}/images"
+      hx-target="#image-list"
+      hx-encoding="multipart/form-data"
+      hx-swap="innerHTML"
+      class="upload-form"
+    >
+      <label class="upload-label" for="file-upload">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+        <span>Choisir une image</span>
+        <small>JPEG, PNG, GIF, WebP — max 20 Mo</small>
+        <input
+          type="file"
+          id="file-upload"
+          name="file"
+          accept="image/jpeg,image/png,image/gif,image/webp,image/avif"
+          aria-label="Choisir une image à uploader"
+        >
+      </label>
+    </form>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/editor.js"></script>
+{% endblock %}

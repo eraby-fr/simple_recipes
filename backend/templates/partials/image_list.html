@@ -1,0 +1,41 @@
+{% if images %}
+<div class="image-grid">
+  {% for filename in images %}
+  <div class="image-item" id="img-{{ filename | replace('.', '-') | replace(' ', '_') }}">
+    <div class="image-thumb">
+      <img
+        src="/uploads/{{ slug }}/images/{{ filename }}"
+        alt="{{ filename }}"
+        loading="lazy"
+      >
+    </div>
+    <div class="image-actions">
+      <button
+        type="button"
+        class="btn-outline btn-sm copy-link-btn"
+        onclick="copyMarkdownLink('{{ filename }}', this)"
+        title="Copier le lien Markdown"
+        aria-label="Copier le lien Markdown pour {{ filename }}"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        Copier
+      </button>
+      <button
+        type="button"
+        class="btn-danger btn-sm"
+        hx-delete="/recipes/{{ slug }}/images/{{ filename }}"
+        hx-target="#image-list"
+        hx-confirm="Supprimer cette image ?"
+        hx-swap="innerHTML"
+        aria-label="Supprimer {{ filename }}"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+      </button>
+    </div>
+    <code class="image-ref">![](images/{{ filename }})</code>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="no-images">Aucune image pour cette recette.</p>
+{% endif %}

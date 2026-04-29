@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+
+# Data (local bind-mount — do not commit)
+data/
+
+# Downloaded frontend assets (built into Docker image)
+backend/static/js/htmx.min.js
+backend/static/css/pico.min.css
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

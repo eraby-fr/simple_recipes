@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <title>{% block title %}Simple Recipes{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/pico.min.css">
+  <link rel="stylesheet" href="/static/css/style.css">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <header class="site-header">
+    <nav class="container-fluid">
+      <a href="/" class="brand">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/></svg>
+        <strong>Simple Recipes</strong>
+      </a>
+      <ul class="nav-links">
+        {% if current_user %}
+          <li>
+            <a href="/recipes/new" role="button" class="btn-primary" title="Nouvelle recette">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span class="btn-label">Nouvelle recette</span>
+            </a>
+          </li>
+          <li>
+            <details class="dropdown" role="list">
+              <summary aria-haspopup="listbox" class="user-menu-btn" role="link">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                {{ current_user.username }}
+              </summary>
+              <ul role="listbox">
+                <li>
+                  <form action="/logout" method="post">
+                    <button type="submit" class="logout-btn">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                      Déconnexion
+                    </button>
+                  </form>
+                </li>
+              </ul>
+            </details>
+          </li>
+        {% else %}
+          <li><a href="/login" class="nav-link">Connexion</a></li>
+          <li><a href="/register" role="button" class="btn-outline">Inscription</a></li>
+        {% endif %}
+      </ul>
+    </nav>
+  </header>
+
+  <main class="container">
+    {% block main %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <div class="container-fluid">
+      <small>Simple Recipes &mdash; Partagez vos recettes</small>
+    </div>
+  </footer>
+
+  <script src="/static/js/htmx.min.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

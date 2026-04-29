@@ -1,0 +1,24 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: simple-recipes:latest
+    container_name: simple-recipes
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8080}:8000"
+    volumes:
+      # Bind-mount your recipe data directory here.
+      # Change ./data to any absolute path on your host, e.g.:
+      #   /mnt/nas/recipes:/app/data
+      - ./data:/app/data
+    environment:
+      DATA_DIR: /app/data
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set in .env}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/docs"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Recettes{% endblock %}
+
+{% block main %}
+<section class="page-hero">
+  <div class="search-bar">
+    <label for="search-input" class="sr-only">Rechercher une recette</label>
+    <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input
+      type="search"
+      id="search-input"
+      name="q"
+      value="{{ q or '' }}"
+      hx-get="/"
+      hx-trigger="input changed delay:400ms, search"
+      hx-target="#recipe-list"
+      hx-push-url="true"
+      hx-include="[name='tag_filter']"
+      placeholder="Rechercher une recette, un ingrédient..."
+      autocomplete="off"
+    >
+  </div>
+
+  {% if all_tags %}
+  <div class="tags-filter" role="navigation" aria-label="Filtrer par tag">
+    <input type="hidden" name="tag_filter" id="tag_filter" value="{{ tag or '' }}">
+    <button
+      type="button"
+      class="tag-btn {% if not tag %}active{% endif %}"
+      hx-get="/"
+      hx-target="#recipe-list"
+      hx-push-url="true"
+      onclick="setTagFilter('', this)"
+    >Toutes</button>
+    {% for t in all_tags %}
+    <button
+      type="button"
+      class="tag-btn {% if tag == t %}active{% endif %}"
+      hx-get="/?tag={{ t | urlencode }}"
+      hx-target="#recipe-list"
+      hx-push-url="true"
+      onclick="setTagFilter('{{ t }}', this)"
+    >{{ t }}</button>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+
+<div id="recipe-list" aria-live="polite">
+  {% include "partials/recipe_list.html" %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function setTagFilter(tag, btn) {
+    document.getElementById('tag_filter').value = tag;
+    document.querySelectorAll('.tag-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+  }
+</script>
+{% endblock %}
