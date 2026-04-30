@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import unicodedata
 from pathlib import Path
 from typing import Optional
 
@@ -31,7 +32,8 @@ def get_images_dir(slug: str) -> Path:
 
 
 def slugify(title: str) -> str:
-    slug = title.lower().strip()
+    slug = unicodedata.normalize("NFKD", title.lower().strip())
+    slug = slug.encode("ascii", "ignore").decode("ascii")
     slug = re.sub(r"[^\w\s-]", "", slug)
     slug = re.sub(r"[\s_]+", "-", slug)
     slug = re.sub(r"-{2,}", "-", slug)
