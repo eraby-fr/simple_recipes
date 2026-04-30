@@ -69,7 +69,7 @@ class TestJWT:
         assert decode_token("") is None
 
     def test_default_expiry_is_three_months(self):
-        before = datetime.now(timezone.utc)
+        before = datetime.now(timezone.utc).replace(microsecond=0)
         token = create_access_token({"sub": "1", "username": "alice"})
         after = datetime.now(timezone.utc)
         import jwt as pyjwt
