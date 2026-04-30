@@ -1,42 +1,42 @@
 # Tests — Simple Recipes
 
-Ce projet dispose de deux niveaux de tests indépendants.
+This project has two independent test levels.
 
 ---
 
-## Vue d'ensemble
+## Overview
 
-| Niveau | Outil | Portée | Où s'exécute |
-|--------|-------|--------|--------------|
-| **Tests unitaires** | pytest | Schémas, slugify, auth JWT | local · CI (tout push / PR) |
-| **Tests de campagne** | pytest + Playwright | Parcours utilisateur complet (E2E) | local uniquement |
+| Level | Tool | Scope | Where it runs |
+|-------|------|-------|---------------|
+| **Unit tests** | pytest | Schemas, slugify, JWT auth | local · CI (every push / PR) |
+| **Campaign tests** | pytest + Playwright | Full end-to-end user flows | local only |
 
 ---
 
-## 1. Tests unitaires
+## 1. Unit tests
 
-### Ce qu'ils couvrent
+### What they cover
 
-| Fichier | Classes testées |
-|---------|----------------|
-| `backend/tests/test_schemas.py` | `UserCreate`, `RecipeCreate`, `RecipeUpdate` (validation Pydantic) |
+| File | Tested classes |
+|------|----------------|
+| `backend/tests/test_schemas.py` | `UserCreate`, `RecipeCreate`, `RecipeUpdate` (Pydantic validation) |
 | `backend/tests/test_storage.py` | `slugify`, `validate_slug`, `fix_image_urls` |
 | `backend/tests/test_auth.py` | `hash_password`, `verify_password`, `create_access_token`, `decode_token` |
 
-### Prérequis
+### Prerequisites
 
 - Python 3.12+
-- Les dépendances du backend (`backend/requirements.txt`)
+- Backend dependencies (`backend/requirements.txt`)
 
-Aucune base de données ni Docker requis : les tests utilisent un répertoire temporaire (`/tmp/simple_recipes_test_*`) créé automatiquement par `backend/tests/conftest.py`.
+No database or Docker required: tests use a temporary directory (`/tmp/simple_recipes_test_*`) created automatically by `backend/tests/conftest.py`.
 
-### Lancer localement
+### Running locally
 
 ```bash
-# Via Make (recommandé)
+# Via Make (recommended)
 make test
 
-# Ou manuellement
+# Or manually
 cd backend
 pip install -r requirements.txt pytest -q
 PYTHONPATH=. DATA_DIR=/tmp/simple-recipes-test \
@@ -44,132 +44,132 @@ PYTHONPATH=. DATA_DIR=/tmp/simple-recipes-test \
   pytest tests/ -v
 ```
 
-### Variables d'environnement injectées
+### Injected environment variables
 
-| Variable | Valeur pour les tests | Rôle |
-|----------|-----------------------|------|
-| `PYTHONPATH` | `.` (depuis `backend/`) | Permet l'import de `app.*` |
-| `DATA_DIR` | `/tmp/simple-recipes-test` | Répertoire de données isolé |
-| `SECRET_KEY` | `test-secret-key-local` | Clé JWT de test |
-| `COOKIE_SECURE` | `false` | Désactive `Secure` sur les cookies (HTTP local) |
+| Variable | Value for tests | Role |
+|----------|-----------------|------|
+| `PYTHONPATH` | `.` (from `backend/`) | Enables `app.*` imports |
+| `DATA_DIR` | `/tmp/simple-recipes-test` | Isolated data directory |
+| `SECRET_KEY` | `test-secret-key-local` | Test JWT key |
+| `COOKIE_SECURE` | `false` | Disables `Secure` flag on cookies (local HTTP) |
 
-### Intégration continue (GitHub Actions)
+### Continuous integration (GitHub Actions)
 
-Le workflow `.github/workflows/unit-tests.yml` s'exécute **à chaque push et pull request** sur toutes les branches.
+The workflow `.github/workflows/unit-tests.yml` runs **on every push and pull request** across all branches.
 
 ```
-push / pull_request (toutes branches)
+push / pull_request (all branches)
     └─ ubuntu-latest
         ├─ actions/checkout@v4
-        ├─ actions/setup-python@v5  (Python 3.12, cache pip)
+        ├─ actions/setup-python@v5  (Python 3.12, pip cache)
         ├─ pip install -r requirements.txt pytest
         └─ pytest tests/ -v
 ```
 
-Le cache pip est indexé sur `backend/requirements.txt` : il est invalidé uniquement si les dépendances changent.
+The pip cache is keyed on `backend/requirements.txt` and is only invalidated when dependencies change.
 
 ---
 
-## 2. Tests de campagne (E2E Playwright)
+## 2. Campaign tests (E2E Playwright)
 
-### Ce qu'ils couvrent
+### What they cover
 
-27 scénarios bout-en-bout simulant deux utilisateurs (`testcook1` / `testcook2`) dans un navigateur Chromium réel :
+27 end-to-end scenarios simulating two users (`testcook1` / `testcook2`) in a real Chromium browser:
 
-- Inscription et connexion
-- Création de 10 recettes (7 + 3)
-- Liste, recherche plein-texte, filtre par tag
-- Consultation du détail, modification
-- Contrôle d'accès (403 pour non-auteur)
-- Upload et suppression d'image
-- Suppression de recettes
-- Déconnexion et vérification de l'état non-authentifié
+- Registration and login
+- Creating 10 recipes (7 + 3)
+- Listing, full-text search, tag filtering
+- Viewing detail, editing
+- Access control (403 for non-author)
+- Image upload and deletion
+- Recipe deletion
+- Logout and verification of unauthenticated state
 
-### Prérequis
+### Prerequisites
 
-- Docker (pour démarrer l'application de test)
-- Python 3.12+ avec les dépendances de test
+- Docker (to start the test application)
+- Python 3.12+ with test dependencies
 
 ```bash
 pip install pytest pytest-playwright playwright
 playwright install chromium
 ```
 
-### Lancer localement
+### Running locally
 
 ```bash
-cd /chemin/vers/simple_recipes
+cd /path/to/simple_recipes
 pytest tests/test_campaign.py -v --browser chromium -p no:randomly
 ```
 
-Le fixture de session (`tests/conftest.py`) gère automatiquement le cycle de vie Docker :
+The session fixture (`tests/conftest.py`) automatically manages the Docker lifecycle:
 
-1. `docker build` de l'image `simple-recipes:test`
-2. Création d'un volume Docker nommé `simple-recipes-test-data` (nettoyé à chaque run)
-3. Démarrage du conteneur sur le port **8181**
-4. Attente de disponibilité (max 45 s)
-5. Exécution des tests
-6. Arrêt du conteneur et suppression du volume
+1. `docker build` of the `simple-recipes:test` image
+2. Create a named Docker volume `simple-recipes-test-data` (cleaned on each run)
+3. Start the container on port **8181**
+4. Wait for availability (max 45 s)
+5. Run the tests
+6. Stop the container and remove the volume
 
-### Conteneur de test
+### Test container
 
-| Paramètre | Valeur |
-|-----------|--------|
+| Parameter | Value |
+|-----------|-------|
 | Port | `8181` |
 | Volume | `simple-recipes-test-data:/app/data` |
 | `SECRET_KEY` | `ci-test-secret-key-1234567890abcdef` |
 | `COOKIE_SECURE` | `false` |
 
-> **Note** : les tests de campagne ne s'exécutent pas en CI (pas de workflow dédié). Ils nécessitent Docker et un affichage ou un mode headless. Ajouter un workflow GitHub Actions avec service Docker ou `act` est possible si nécessaire.
+> **Note**: campaign tests do not run in CI (no dedicated workflow). They require Docker and a display or headless mode. Adding a GitHub Actions workflow with a Docker service or `act` is possible if needed.
 
 ---
 
-## 3. Livraison — Image Docker de release
+## 3. Release — Docker image
 
-Le workflow `.github/workflows/docker-release.yml` publie automatiquement une image sur **GitHub Container Registry** (`ghcr.io`) lors d'un push sur une branche `release/*`.
+The workflow `.github/workflows/docker-release.yml` automatically publishes an image to **GitHub Container Registry** (`ghcr.io`) on a push to a `release/*` branch.
 
-### Déclenchement
+### Trigger
 
 ```bash
 git checkout -b release/1.2.3
 git push origin release/1.2.3
 ```
 
-### Ce que produit le workflow
+### What the workflow produces
 
 ```
 push → release/1.2.3
     └─ ubuntu-latest
-        ├─ Connexion à ghcr.io (GITHUB_TOKEN — aucun secret à configurer)
+        ├─ Login to ghcr.io (GITHUB_TOKEN — no secret to configure)
         ├─ docker buildx build
         └─ push
             ├─ ghcr.io/<org>/<repo>:1.2.3
             └─ ghcr.io/<org>/<repo>:latest
 ```
 
-Le cache BuildKit (`type=gha`) est activé pour accélérer les rebuilds.
+BuildKit cache (`type=gha`) is enabled to speed up rebuilds.
 
-### Consommer l'image
+### Pulling the image
 
 ```bash
 docker pull ghcr.io/<org>/simple-recipes:1.2.3
 ```
 
-L'image est listée dans l'onglet **Packages** du dépôt GitHub.
+The image is listed in the **Packages** tab of the GitHub repository.
 
-### Pré-requis (dépôt privé uniquement)
+### Prerequisites (private repository only)
 
-**Settings → Actions → General → Workflow permissions** → cocher **Read and write permissions**.
+**Settings → Actions → General → Workflow permissions** → check **Read and write permissions**.
 
 ---
 
-## Référence rapide
+## Quick reference
 
 ```bash
-make test          # Tests unitaires (sans Docker)
-make dev           # Serveur de développement local
-make up            # Démarrage via Docker Compose (production-like)
+make test          # Unit tests (no Docker)
+make dev           # Local development server
+make up            # Start via Docker Compose (production-like)
 
-# Tests E2E (Docker requis)
+# E2E tests (Docker required)
 pytest tests/test_campaign.py -v --browser chromium -p no:randomly
 ```

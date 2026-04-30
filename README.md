@@ -1,89 +1,89 @@
 # Simple Recipes
 
-Application web de gestion et partage de recettes de cuisine. Backend **FastAPI** (Python 3.12), frontend **HTMX** + **Pico.css**, stockage **SQLite + Markdown**.
+Web application for managing and sharing cooking recipes. Backend **FastAPI** (Python 3.12), frontend **HTMX** + **Pico.css**, storage **SQLite + Markdown**.
 
-## Démarrage rapide (Docker)
+## Quick start (Docker)
 
 ```bash
-# 1. Créer le .env (SECRET_KEY générée automatiquement)
+# 1. Create the .env file (SECRET_KEY auto-generated)
 make env
 
-# 2. Construire l'image
+# 2. Build the image
 make build
 
-# 3. Démarrer le service
+# 3. Start the service
 make up
 ```
 
-Ouvrir → **http://localhost:8080** (port modifiable dans `.env`).
+Open → **http://localhost:8080** (port configurable in `.env`).
 
 ## Configuration
 
-Modifier le fichier `.env` :
+Edit the `.env` file:
 
-| Variable     | Défaut   | Description                             |
-|--------------|----------|-----------------------------------------|
-| `PORT`       | `8080`   | Port exposé sur l'hôte                  |
-| `SECRET_KEY` | *(auto)* | Clé secrète JWT — **ne pas partager**   |
+| Variable     | Default  | Description                              |
+|--------------|----------|------------------------------------------|
+| `PORT`       | `8080`   | Port exposed on the host                 |
+| `SECRET_KEY` | *(auto)* | JWT secret key — **do not share**        |
 
-### Changer le dossier de données
+### Changing the data directory
 
-Par défaut, les recettes sont stockées dans `./data/`. Pour utiliser un autre chemin (NAS, disque externe…), modifier le fichier `docker-compose.yml` :
+By default, recipes are stored in `./data/`. To use a different path (NAS, external drive…), edit `docker-compose.yml`:
 
 ```yaml
 volumes:
-  - /mon/chemin/absolu:/app/data
+  - /my/absolute/path:/app/data
 ```
 
-## Structure du stockage
+## Storage structure
 
 ```
 data/
 ├── db/
-│   └── recipes.db          # Base SQLite (métadonnées, utilisateurs, tags)
+│   └── recipes.db          # SQLite database (metadata, users, tags)
 └── recipes/
-    └── {slug-recette}/
-        ├── recipe.md       # Contenu Markdown
+    └── {recipe-slug}/
+        ├── recipe.md       # Markdown content
         └── images/
             ├── cover.jpg
             └── ...
 ```
 
-## Développement local (sans Docker)
+## Local development (without Docker)
 
-Nécessite Python 3.12+ et `make` :
+Requires Python 3.12+ and `make`:
 
 ```bash
 make dev
 ```
 
-Télécharge HTMX/Pico.css, installe les dépendances et lance le serveur en mode reload sur le port 8000.
+Downloads HTMX/Pico.css, installs dependencies, and starts the server in reload mode on port 8000.
 
-## Commandes Make
+## Make commands
 
-| Commande        | Description                          |
-|-----------------|--------------------------------------|
-| `make build`    | Construire l'image Docker            |
-| `make up`       | Démarrer en arrière-plan             |
-| `make down`     | Arrêter le service                   |
-| `make logs`     | Suivre les logs                      |
-| `make shell`    | Shell dans le conteneur              |
-| `make clean`    | Supprimer conteneurs + image         |
-| `make restart`  | Redémarrer le service                |
-| `make dev`      | Développement local sans Docker      |
-| `make test`     | Lancer les tests unitaires           |
+| Command         | Description                           |
+|-----------------|---------------------------------------|
+| `make build`    | Build the Docker image                |
+| `make up`       | Start in the background               |
+| `make down`     | Stop the service                      |
+| `make logs`     | Follow container logs                 |
+| `make shell`    | Open a shell in the container         |
+| `make clean`    | Remove containers + image             |
+| `make restart`  | Restart the service                   |
+| `make dev`      | Local development without Docker      |
+| `make test`     | Run unit tests                        |
 
-## Tests unitaires
+## Unit tests
 
-Les tests couvrent les validateurs Pydantic, les fonctions de stockage (slug, URLs) et l'authentification (hachage + JWT).
+Tests cover Pydantic validators, storage functions (slug, URLs), and authentication (hashing + JWT).
 
-### Avec Make (recommandé)
+### With Make (recommended)
 
 ```bash
 make test
 ```
 
-### Manuellement
+### Manually
 
 ```bash
 cd backend
@@ -96,17 +96,17 @@ COOKIE_SECURE=false \
 pytest tests/ -v
 ```
 
-> **Important :** lancer `pytest` depuis `backend/` (et non depuis la racine) pour éviter que pydantic-settings charge le `.env` racine, qui contient des variables non reconnues par `Settings`.
+> **Important:** run `pytest` from `backend/` (not from the root) to prevent pydantic-settings from loading the root `.env`, which contains variables not recognised by `Settings`.
 
-### Commandes pytest utiles
+### Useful pytest commands
 
-| Commande | Description |
+| Command | Description |
 |---|---|
-| `pytest tests/ -v` | Tous les tests, verbose |
-| `pytest tests/test_schemas.py` | Un seul fichier |
-| `pytest tests/ -k "Slug"` | Filtrer par nom de test |
-| `pytest tests/ -x` | Arrêter au premier échec |
+| `pytest tests/ -v` | All tests, verbose |
+| `pytest tests/test_schemas.py` | Single file |
+| `pytest tests/ -k "Slug"` | Filter by test name |
+| `pytest tests/ -x` | Stop at first failure |
 
 ## API
 
-La documentation interactive est disponible à `/api/docs` (Swagger UI) une fois le service lancé.
+Interactive documentation is available at `/api/docs` (Swagger UI) once the service is running.
