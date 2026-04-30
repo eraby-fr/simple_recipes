@@ -1,4 +1,4 @@
-.PHONY: help build up down logs shell clean env dev
+.PHONY: help build up down logs shell clean env dev test
 
 ## ── Variables ───────────────────────────────────────────────────────────────
 IMAGE  := simple-recipes
@@ -51,6 +51,13 @@ dev-assets: ## Download HTMX and Pico.css for local development
 	@curl -fsSL -o backend/static/css/pico.min.css \
 		https://unpkg.com/@picocss/pico@2.0.6/css/pico.min.css
 	@echo "✓ Frontend assets downloaded."
+
+test: ## Run unit tests locally (requires Python 3.12+)
+	@cd backend && \
+		pip install -r requirements.txt pytest -q && \
+		PYTHONPATH=. DATA_DIR=/tmp/simple-recipes-test \
+		SECRET_KEY=test-secret-key-local COOKIE_SECURE=false \
+		pytest tests/ -v
 
 dev: dev-assets ## Run locally without Docker (requires Python 3.12+)
 	@cd backend && \

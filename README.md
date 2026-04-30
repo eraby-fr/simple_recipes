@@ -71,6 +71,41 @@ Télécharge HTMX/Pico.css, installe les dépendances et lance le serveur en mod
 | `make clean`    | Supprimer conteneurs + image         |
 | `make restart`  | Redémarrer le service                |
 | `make dev`      | Développement local sans Docker      |
+| `make test`     | Lancer les tests unitaires           |
+
+## Tests unitaires
+
+Les tests couvrent les validateurs Pydantic, les fonctions de stockage (slug, URLs) et l'authentification (hachage + JWT).
+
+### Avec Make (recommandé)
+
+```bash
+make test
+```
+
+### Manuellement
+
+```bash
+cd backend
+pip install -r requirements.txt pytest
+
+PYTHONPATH=. \
+DATA_DIR=/tmp/simple-recipes-test \
+SECRET_KEY=test-secret-key-local \
+COOKIE_SECURE=false \
+pytest tests/ -v
+```
+
+> **Important :** lancer `pytest` depuis `backend/` (et non depuis la racine) pour éviter que pydantic-settings charge le `.env` racine, qui contient des variables non reconnues par `Settings`.
+
+### Commandes pytest utiles
+
+| Commande | Description |
+|---|---|
+| `pytest tests/ -v` | Tous les tests, verbose |
+| `pytest tests/test_schemas.py` | Un seul fichier |
+| `pytest tests/ -k "Slug"` | Filtrer par nom de test |
+| `pytest tests/ -x` | Arrêter au premier échec |
 
 ## API
 
