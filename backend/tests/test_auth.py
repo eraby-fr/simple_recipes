@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import timedelta, timezone, datetime
 
 import pytest
 
@@ -8,6 +8,7 @@ from app.auth import (
     hash_password,
     verify_password,
 )
+from app.config import settings
 
 
 class TestPasswordHashing:
@@ -66,3 +67,14 @@ class TestJWT:
 
     def test_empty_string_returns_none(self):
         assert decode_token("") is None
+
+    def test_default_expiry_is_three_months(self):
+        before = datetime.now(timezone.utc)
+        token = create_access_token({"sub": "1", "username": "alice"})
+        after = datetime.now(timezone.utc)
+        import jwt as pyjwt
+        payload = pyjwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        exp = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
+        expected_delta = timedelta(minutes=settings.access_token_expire_minutes)
+        assert before + expected_delta <= exp <= after + expected_delta + timedelta(seconds=5)
+        assert settings.access_token_expire_minutes == 60 * 24 * 90  # 3 months

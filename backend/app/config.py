@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     data_dir: Path = Path("/app/data")
     secret_key: str = _DEFAULT_SECRET
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
+    access_token_expire_minutes: int = 60 * 24 * 90  # 3 months
     cookie_secure: bool = True
 
 

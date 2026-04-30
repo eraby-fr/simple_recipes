@@ -2,13 +2,14 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
+from app.auth import get_current_user
 from app.config import RECIPES_DIR, settings
 from app.database import init_db
 from app.routes import api_auth, api_recipes, pages
@@ -63,7 +64,11 @@ async def security_headers(request: Request, call_next: object) -> Response:
     return response
 
 @app.get("/uploads/{slug}/images/{filename}")
-async def serve_upload(slug: str, filename: str) -> FileResponse:
+async def serve_upload(
+    slug: str,
+    filename: str,
+    _: dict = Depends(get_current_user),
+) -> FileResponse:
     try:
         validate_slug(slug)
     except ValueError:

@@ -514,7 +514,8 @@ class TestCampaign:
         # the cookie from the shared browser store before the next navigation.
         page.context.clear_cookies()
         page.goto(f"{base_url}/")
-        page.wait_for_selector("a[href='/login']", timeout=8_000)
+        # Sans authentification, / redirige vers /login
+        page.wait_for_url(re.compile(r"/login$"), timeout=8_000)
 
     def test_24_logout_user1(self, page1: Page, base_url: str) -> None:
         """testcook1 se déconnecte → nav affiche 'Connexion'."""
@@ -541,3 +542,20 @@ class TestCampaign:
         page1.click("button[type='submit']")
         page1.wait_for_url(f"{base_url}/", timeout=8_000)
         expect(page1.locator("nav")).to_contain_text(USER1["username"])
+
+    def test_28_unauthenticated_recipe_detail_redirects_to_login(
+        self, page2: Page, base_url: str
+    ) -> None:
+        """Après déconnexion, accéder à une recette redirige vers /login."""
+        slug = _STATE["user1_slugs"][0]
+        page2.goto(f"{base_url}/recipes/{slug}")
+        expect(page2).to_have_url(re.compile(r"/login$"), timeout=5_000)
+
+    def test_29_unauthenticated_api_recipes_returns_401(
+        self, page2: Page, base_url: str
+    ) -> None:
+        """Après déconnexion, GET /api/recipes retourne 401."""
+        resp = page2.request.get(f"{base_url}/api/recipes")
+        assert resp.status == 401, (
+            f"GET /api/recipes attendu 401 sans auth, reçu {resp.status}"
+        )
