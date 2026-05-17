@@ -110,3 +110,12 @@ pytest tests/ -v
 ## API
 
 Interactive documentation is available at `/api/docs` (Swagger UI) once the service is running.
+
+## Documentation
+
+Additional guides are available in the [`documentation/`](documentation/) folder:
+
+| File | Description |
+|------|-------------|
+| [`TESTING.md`](documentation/TESTING.md) | Unit tests and E2E campaign tests |
+| [`debian-deployment.md`](documentation/debian-deployment.md) | Deploying on Debian with systemd + Nginx + HTTPS |
