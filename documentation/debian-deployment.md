@@ -14,39 +14,39 @@ This tutorial covers deploying Simple Recipes on a Debian (12 "Bookworm" or late
 
 ## 1. Install Docker and Docker Compose
 
+Follow the official Docker documentation for Debian:
+
+> **https://docs.docker.com/engine/install/debian/**
+
+Make sure `docker compose` (v2 plugin) is available after installation:
+
 ```bash
-sudo apt update && sudo apt install -y ca-certificates curl gnupg
-
-sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/debian/gpg \
-  | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-sudo chmod a+r /etc/apt/keyrings/docker.gpg
-
-echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
-  https://download.docker.com/linux/debian \
-  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
-  | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-sudo apt update && sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-
-sudo systemctl enable --now docker
+docker compose version
 ```
 
 ---
 
 ## 2. Deploy the application
 
-```bash
-sudo mkdir -p /opt/simple-recipes
-sudo git clone https://github.com/<org>/simple-recipes.git /opt/simple-recipes
-cd /opt/simple-recipes
+Create a dedicated system user that owns the application directory and belongs to the `docker` group:
 
-# Generate the .env file (SECRET_KEY is auto-generated)
-make env
+```bash
+sudo useradd -r -m -d /opt/simple-recipes -s /bin/bash recipes
+sudo usermod -aG docker recipes
 ```
 
-Review `/opt/simple-recipes/.env` and adjust `PORT` if needed (default: `8080`).
+Clone the repository and set up the environment **as that user**:
+
+```bash
+sudo -u recipes git clone https://github.com/<org>/simple-recipes.git /opt/simple-recipes
+sudo -u recipes bash -c 'cd /opt/simple-recipes && make env'
+```
+
+Review `/opt/simple-recipes/.env` as root and adjust `PORT` if needed (default: `8080`):
+
+```bash
+sudo nano /opt/simple-recipes/.env
+```
 
 > The data directory is persisted via the Docker volume defined in `docker-compose.yml`.  
 > To use a custom path (NAS, external drive…), edit the `volumes:` section before the first start.
@@ -68,6 +68,8 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+User=recipes
+Group=recipes
 WorkingDirectory=/opt/simple-recipes
 ExecStart=/usr/bin/docker compose up -d --remove-orphans
 ExecStop=/usr/bin/docker compose down
@@ -221,5 +223,5 @@ sudo systemctl restart simple-recipes   # Restart
 sudo systemctl status  simple-recipes   # Status
 
 sudo journalctl -u simple-recipes -f    # Live logs
-docker compose -f /opt/simple-recipes/docker-compose.yml logs -f  # App logs
+sudo -u recipes docker compose -f /opt/simple-recipes/docker-compose.yml logs -f  # App logs
 ```
