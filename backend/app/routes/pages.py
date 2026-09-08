@@ -186,7 +186,7 @@ async def register_submit(
 
 @router.post("/logout")
 async def logout(response: Response) -> RedirectResponse:
-    resp = _redirect("/")
+    resp = _redirect("/login")
     resp.delete_cookie("access_token")
     return resp
 
@@ -205,6 +205,8 @@ async def index(
     db: aiosqlite.Connection = Depends(get_db),
     current_user: Optional[dict] = Depends(get_current_user_optional),
 ) -> HTMLResponse:
+    if not current_user:
+        return _redirect("/login")
     recipes = await _fetch_recipes(db, q=q, tag=tag, page=page)
     all_tags = await _fetch_all_tags(db)
 
@@ -313,6 +315,8 @@ async def recipe_detail(
     db: aiosqlite.Connection = Depends(get_db),
     current_user: Optional[dict] = Depends(get_current_user_optional),
 ) -> HTMLResponse:
+    if not current_user:
+        return _redirect("/login")
     async with db.execute(
         """
         SELECT r.id, r.slug, r.title, r.summary, r.author_id, r.created_at,

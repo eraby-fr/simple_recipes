@@ -152,6 +152,7 @@ async def list_recipes(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: aiosqlite.Connection = Depends(get_db),
+    _: dict = Depends(get_current_user),
 ) -> list[RecipeOut]:
     offset = (page - 1) * page_size
     results: list[RecipeOut] = []
@@ -252,6 +253,7 @@ async def create_recipe(
 async def get_recipe(
     slug: str = Depends(_valid_slug),
     db: aiosqlite.Connection = Depends(get_db),
+    _: dict = Depends(get_current_user),
 ) -> RecipeDetail:
     async with db.execute(
         """
@@ -429,6 +431,7 @@ async def remove_image(
 async def list_recipe_images(
     slug: str = Depends(_valid_slug),
     db: aiosqlite.Connection = Depends(get_db),
+    _: dict = Depends(get_current_user),
 ) -> list[dict]:
     async with db.execute("SELECT 1 FROM recipes WHERE slug = ?", (slug,)) as cur:
         if not await cur.fetchone():
