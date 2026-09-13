@@ -202,7 +202,7 @@ class TestCampaign:
     # ════════════════════════════════════════════════════════════════════════
 
     def test_01_register_user1(self, page1: Page, base_url: str) -> None:
-        """testcook1 s'inscrit → redirigé vers /login."""
+        """testcook1 s'inscrit (premier compte = admin approuvé) → /login."""
         page1.goto(f"{base_url}/register")
         expect(page1.locator("h1")).to_have_text("Créer un compte")
         page1.fill("#username", USER1["username"])
@@ -211,13 +211,13 @@ class TestCampaign:
         page1.wait_for_url(f"{base_url}/login", timeout=10_000)
 
     def test_02_register_user2(self, page2: Page, base_url: str) -> None:
-        """testcook2 s'inscrit → redirigé vers /login."""
+        """testcook2 s'inscrit → compte en attente d'approbation."""
         page2.goto(f"{base_url}/register")
         expect(page2.locator("h1")).to_have_text("Créer un compte")
         page2.fill("#username", USER2["username"])
         page2.fill("#password", USER2["password"])
         page2.click("button[type='submit']")
-        page2.wait_for_url(f"{base_url}/login", timeout=10_000)
+        expect(page2.get_by_role("status")).to_contain_text("approuver")
 
     # ════════════════════════════════════════════════════════════════════════
     # Phase 2 — Connexion
@@ -233,9 +233,16 @@ class TestCampaign:
         page1.wait_for_url(f"{base_url}/", timeout=10_000)
         expect(page1.locator("nav")).to_contain_text(USER1["username"])
         expect(page1.get_by_role("button", name="Nouvelle recette")).to_be_visible()
+        expect(page1.get_by_role("link", name="Comptes")).to_be_visible()
 
-    def test_04_login_user2(self, page2: Page, base_url: str) -> None:
-        """testcook2 se connecte → redirigé vers / avec son nom dans la nav."""
+    def test_04_login_user2(self, page1: Page, page2: Page, base_url: str) -> None:
+        """L'admin approuve testcook2, qui peut alors se connecter."""
+        page1.goto(f"{base_url}/admin/users")
+        expect(page1.locator("h1")).to_have_text("Gestion des comptes")
+        row = page1.locator("tr", has_text=USER2["username"])
+        row.get_by_role("button", name="Approuver").click()
+        expect(row).to_contain_text("Approuvé", timeout=10_000)
+
         page2.goto(f"{base_url}/login")
         page2.fill("#username", USER2["username"])
         page2.fill("#password", USER2["password"])

@@ -323,11 +323,23 @@ a[role="button"] {
   border: 1px solid #fecaca;
 }
 
+.alert-info {
+  background: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+}
+
 @media (prefers-color-scheme: dark) {
   .alert-error {
     background: #1f0707;
     color: #fca5a5;
     border-color: #7f1d1d;
+  }
+
+  .alert-info {
+    background: #0b1a33;
+    color: #93c5fd;
+    border-color: #1e3a8a;
   }
 }
 
@@ -1251,5 +1263,87 @@ a.tag:hover {
   .card-cover,
   .card-cover-placeholder {
     height: 240px;
+  }
+}
+
+/* ----------------------------------------------------------
+   Admin — users
+   ---------------------------------------------------------- */
+.admin-page h1 {
+  margin-bottom: 0.35rem;
+}
+
+.admin-lead {
+  color: var(--pico-muted-color, #6b7280);
+  margin-bottom: 1.5rem;
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+}
+
+table.admin-users {
+  width: 100%;
+}
+
+table.admin-users td.admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+table.admin-users td.admin-actions form {
+  margin: 0;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.badge-admin {
+  background: var(--accent-light);
+  color: var(--accent-dark);
+}
+
+.badge-user {
+  background: var(--pico-secondary-background, #f3f4f6);
+  color: var(--pico-color, #374151);
+}
+
+.badge-pending {
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.badge-approved {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.badge-rejected {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+@media (prefers-color-scheme: dark) {
+  .badge-pending {
+    background: #2a1508;
+    color: #fdba74;
+  }
+
+  .badge-approved {
+    background: #052e1c;
+    color: #6ee7b7;
+  }
+
+  .badge-rejected {
+    background: #1f0707;
+    color: #fca5a5;
   }
 }

@@ -49,6 +49,19 @@ from app.storage import (
     validate_slug,
     write_recipe_content,
 )
+from app.users import (
+    ROLE_ADMIN,
+    STATUS_APPROVED,
+    STATUS_PENDING,
+    STATUS_REJECTED,
+    UsernameTaken,
+    create_registered_user,
+    get_user_by_id,
+    list_users,
+    login_block_reason,
+    set_user_role,
+    set_user_status,
+)
 
 
 _limiter = Limiter(key_func=get_remote_address)
@@ -71,6 +84,17 @@ def _redirect(url: str) -> RedirectResponse:
     return RedirectResponse(url=url, status_code=status.HTTP_303_SEE_OTHER)
 
 
+def _ensure_admin(current_user: Optional[dict]) -> Optional[RedirectResponse]:
+    if not current_user:
+        return _redirect("/login")
+    if current_user.get("role") != ROLE_ADMIN:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail="Accès réservé aux administrateurs",
+        )
+    return None
+
+
 def _htmx_redirect(url: str) -> HTMLResponse:
     r = HTMLResponse("")
     r.headers["HX-Redirect"] = url
@@ -90,7 +114,13 @@ async def login_page(
     if current_user:
         return _redirect("/")
     return templates.TemplateResponse(
-        "login.html", {"request": request, "current_user": current_user, "error": None}
+        "login.html",
+        {
+            "request": request,
+            "current_user": current_user,
+            "error": None,
+            "info": request.query_params.get("pending"),
+        },
     )
 
 
@@ -103,7 +133,7 @@ async def login_submit(
     db: aiosqlite.Connection = Depends(get_db),
 ) -> HTMLResponse:
     async with db.execute(
-        "SELECT id, username, hashed_password FROM users WHERE username = ?",
+        "SELECT id, username, hashed_password, status FROM users WHERE username = ?",
         (username,),
     ) as cur:
         row = await cur.fetchone()
@@ -115,8 +145,22 @@ async def login_submit(
                 "request": request,
                 "current_user": None,
                 "error": "Identifiants incorrects",
+                "info": None,
             },
             status_code=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    blocked = login_block_reason(row["status"])
+    if blocked:
+        return templates.TemplateResponse(
+            "login.html",
+            {
+                "request": request,
+                "current_user": None,
+                "error": blocked,
+                "info": None,
+            },
+            status_code=status.HTTP_403_FORBIDDEN,
         )
 
     token = create_access_token({"sub": str(row["id"]), "username": row["username"]})
@@ -141,7 +185,12 @@ async def register_page(
         return _redirect("/")
     return templates.TemplateResponse(
         "register.html",
-        {"request": request, "current_user": current_user, "error": None},
+        {
+            "request": request,
+            "current_user": current_user,
+            "error": None,
+            "success": None,
+        },
     )
 
 
@@ -161,34 +210,167 @@ async def register_submit(
     elif len(password) < 8:
         error = "Le mot de passe doit faire au moins 8 caractères"
 
-    if not error:
-        async with db.execute(
-            "SELECT id FROM users WHERE username = ?", (username,)
-        ) as cur:
-            if await cur.fetchone():
-                error = "Ce nom d'utilisateur est déjà pris"
-
     if error:
         return templates.TemplateResponse(
             "register.html",
-            {"request": request, "current_user": None, "error": error},
+            {
+                "request": request,
+                "current_user": None,
+                "error": error,
+                "success": None,
+            },
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         )
 
     hashed = hash_password(password)
-    await db.execute(
-        "INSERT INTO users (username, hashed_password) VALUES (?, ?)",
-        (username, hashed),
+    try:
+        created = await create_registered_user(db, username, hashed)
+    except UsernameTaken:
+        return templates.TemplateResponse(
+            "register.html",
+            {
+                "request": request,
+                "current_user": None,
+                "error": "Ce nom d'utilisateur est déjà pris",
+                "success": None,
+            },
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+    if created["status"] == STATUS_APPROVED:
+        return _redirect("/login")
+    return templates.TemplateResponse(
+        "register.html",
+        {
+            "request": request,
+            "current_user": None,
+            "error": None,
+            "success": (
+                "Votre compte a été créé. Un administrateur doit l'approuver "
+                "avant que vous puissiez vous connecter."
+            ),
+        },
     )
-    await db.commit()
-    return _redirect("/login")
 
 
 @router.post("/logout")
-async def logout(response: Response) -> RedirectResponse:
+async def logout() -> RedirectResponse:
     resp = _redirect("/login")
-    resp.delete_cookie("access_token")
+    resp.delete_cookie(
+        "access_token",
+        httponly=True,
+        samesite="lax",
+        secure=settings.cookie_secure,
+    )
     return resp
+
+
+# ---------------------------------------------------------------------------
+# Admin — account approval
+# ---------------------------------------------------------------------------
+
+
+@router.get("/admin/users", response_class=HTMLResponse)
+async def admin_users_page(
+    request: Request,
+    db: aiosqlite.Connection = Depends(get_db),
+    current_user: Optional[dict] = Depends(get_current_user_optional),
+) -> HTMLResponse:
+    denied = _ensure_admin(current_user)
+    if denied:
+        return denied
+    users = await list_users(db)
+    return templates.TemplateResponse(
+        "admin_users.html",
+        {
+            "request": request,
+            "current_user": current_user,
+            "users": users,
+            "error": None,
+        },
+    )
+
+
+async def _admin_users_error(
+    request: Request,
+    db: aiosqlite.Connection,
+    current_user: dict,
+    error: str,
+) -> HTMLResponse:
+    users = await list_users(db)
+    return templates.TemplateResponse(
+        "admin_users.html",
+        {
+            "request": request,
+            "current_user": current_user,
+            "users": users,
+            "error": error,
+        },
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+    )
+
+
+@router.post("/admin/users/{user_id}/approve", response_class=HTMLResponse)
+async def admin_approve_user(
+    request: Request,
+    user_id: int,
+    db: aiosqlite.Connection = Depends(get_db),
+    current_user: Optional[dict] = Depends(get_current_user_optional),
+) -> HTMLResponse:
+    denied = _ensure_admin(current_user)
+    if denied:
+        return denied
+    target = await get_user_by_id(db, user_id)
+    if not target or target["status"] != STATUS_PENDING:
+        return await _admin_users_error(
+            request, db, current_user, "Seuls les comptes en attente peuvent être approuvés"
+        )
+    await set_user_status(db, user_id, STATUS_APPROVED)
+    return _redirect("/admin/users")
+
+
+@router.post("/admin/users/{user_id}/reject", response_class=HTMLResponse)
+async def admin_reject_user(
+    request: Request,
+    user_id: int,
+    db: aiosqlite.Connection = Depends(get_db),
+    current_user: Optional[dict] = Depends(get_current_user_optional),
+) -> HTMLResponse:
+    denied = _ensure_admin(current_user)
+    if denied:
+        return denied
+    target = await get_user_by_id(db, user_id)
+    if not target or target["id"] == current_user["id"]:
+        return await _admin_users_error(
+            request, db, current_user, "Impossible de refuser ce compte"
+        )
+    if target["status"] != STATUS_PENDING:
+        return await _admin_users_error(
+            request, db, current_user, "Seuls les comptes en attente peuvent être refusés"
+        )
+    await set_user_status(db, user_id, STATUS_REJECTED)
+    return _redirect("/admin/users")
+
+
+@router.post("/admin/users/{user_id}/make-admin", response_class=HTMLResponse)
+async def admin_grant_admin(
+    request: Request,
+    user_id: int,
+    db: aiosqlite.Connection = Depends(get_db),
+    current_user: Optional[dict] = Depends(get_current_user_optional),
+) -> HTMLResponse:
+    denied = _ensure_admin(current_user)
+    if denied:
+        return denied
+    target = await get_user_by_id(db, user_id)
+    if not target or target["status"] != STATUS_APPROVED:
+        return await _admin_users_error(
+            request,
+            db,
+            current_user,
+            "Seuls les comptes approuvés peuvent devenir administrateur",
+        )
+    await set_user_role(db, user_id, ROLE_ADMIN)
+    return _redirect("/admin/users")
 
 
 # ---------------------------------------------------------------------------
