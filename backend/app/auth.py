@@ -11,6 +11,7 @@ from fastapi import Cookie, Depends, HTTPException, status
 from app.config import settings
 from app.database import get_db
 from app.schemas import TokenData
+from app.users import STATUS_APPROVED
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -57,13 +58,16 @@ async def get_current_user_optional(
     if token_data is None:
         return None
     async with db.execute(
-        "SELECT id, username FROM users WHERE id = ?",
+        "SELECT id, username, role, status FROM users WHERE id = ?",
         (token_data.user_id,),
     ) as cursor:
         row = await cursor.fetchone()
     if row is None:
         return None
-    return dict(row)
+    user = dict(row)
+    if user.get("status") != STATUS_APPROVED:
+        return None
+    return user
 
 
 async def get_current_user(

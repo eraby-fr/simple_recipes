@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Comptes — Simple Recipes{% endblock %}
+
+{% block main %}
+<div class="admin-page">
+  <h1>Gestion des comptes</h1>
+  <p class="admin-lead">Approuvez les inscriptions et attribuez le rôle administrateur.</p>
+
+  {% if error %}
+  <div class="alert alert-error" role="alert">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    {{ error }}
+  </div>
+  {% endif %}
+
+  <div class="admin-table-wrap">
+    <table class="admin-users">
+      <thead>
+        <tr>
+          <th>Utilisateur</th>
+          <th>Rôle</th>
+          <th>Statut</th>
+          <th>Créé le</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for user in users %}
+        <tr>
+          <td>{{ user.username }}</td>
+          <td>
+            {% if user.role == "admin" %}
+            <span class="badge badge-admin">Administrateur</span>
+            {% else %}
+            <span class="badge badge-user">Utilisateur</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if user.status == "pending" %}
+            <span class="badge badge-pending">En attente</span>
+            {% elif user.status == "approved" %}
+            <span class="badge badge-approved">Approuvé</span>
+            {% else %}
+            <span class="badge badge-rejected">Refusé</span>
+            {% endif %}
+          </td>
+          <td>{{ user.created_at }}</td>
+          <td class="admin-actions">
+            {% if user.status == "pending" %}
+            <form action="/admin/users/{{ user.id }}/approve" method="post">
+              <button type="submit" class="btn-primary">Approuver</button>
+            </form>
+            <form action="/admin/users/{{ user.id }}/reject" method="post">
+              <button type="submit" class="btn-danger">Refuser</button>
+            </form>
+            {% elif user.status == "approved" and user.role != "admin" %}
+            <form action="/admin/users/{{ user.id }}/make-admin" method="post">
+              <button type="submit" class="btn-outline">Rendre admin</button>
+            </form>
+            {% else %}
+            —
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
