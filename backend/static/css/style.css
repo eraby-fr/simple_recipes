@@ -514,7 +514,7 @@ button.tag-btn.active,
 }
 
 .card-body {
-  padding: 1.1rem 1.25rem 1.25rem;
+  padding: 1.1rem 1.25rem 0.75rem;
 }
 
 .card-title {
@@ -547,6 +547,7 @@ button.tag-btn.active,
   justify-content: space-between;
   gap: 0.5rem;
   flex-wrap: wrap;
+  padding: 0 1.25rem 1.25rem;
 }
 
 .card-author {
@@ -681,6 +682,34 @@ a.tag:hover {
 
 .recipe-byline .sep {
   opacity: 0.4;
+}
+
+.recipe-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+}
+
+.recipe-times li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: var(--radius-btn);
+  background: var(--pico-secondary-background, #f3f4f6);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.recipe-times li span {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--pico-muted-color, #6b7280);
 }
 
 .recipe-cover-figure {
@@ -984,8 +1013,24 @@ a.tag:hover {
   grid-column: 1 / -1;
 }
 
+.form-grid-times {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 900px) {
+  .form-grid-times {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 @media (max-width: 640px) {
   .form-grid-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .form-grid-times {
     grid-template-columns: 1fr;
   }
 }
@@ -1123,15 +1168,34 @@ a.tag:hover {
   display: flex;
   gap: 0.75rem;
   align-items: center;
-  padding-top: 0.5rem;
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  margin-top: 0.5rem;
+  padding: 0.75rem 0 0.35rem;
+  background: var(--pico-background-color, #fff);
+  border-top: 1px solid var(--pico-muted-border-color, #e5e7eb);
+  box-shadow: 0 -12px 16px -12px rgba(0, 0, 0, 0.18);
+}
+
+.form-actions button {
+  width: auto;
+  margin: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .form-actions {
+    box-shadow: 0 -12px 16px -12px rgba(0, 0, 0, 0.55);
+  }
 }
 
 /* ----------------------------------------------------------
    Images section
    ---------------------------------------------------------- */
 .images-section {
-  margin-top: 3rem;
+  margin-top: 1.5rem;
   padding-top: 2rem;
+  padding-bottom: 4rem;
   border-top: 1px solid var(--pico-muted-border-color, #e5e7eb);
 }
 
@@ -1167,6 +1231,11 @@ a.tag:hover {
   background: var(--pico-card-background-color, #fff);
 }
 
+.image-item.is-cover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
 .image-thumb {
   aspect-ratio: 4/3;
   overflow: hidden;
@@ -1184,6 +1253,7 @@ a.tag:hover {
   gap: 0.35rem;
   padding: 0.5rem;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .image-actions button {

@@ -37,6 +37,8 @@ class TestRecipeCreate:
         assert r.title == "Ma Recette"
         assert r.summary == ""
         assert r.tags == []
+        assert r.prep_time == ""
+        assert r.servings == ""
 
     def test_title_stripped(self):
         r = RecipeCreate(title="  Soupe  ", content="test")

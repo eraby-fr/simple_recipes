@@ -260,7 +260,7 @@ class TestCampaign:
             page1.goto(f"{base_url}/recipes/new")
             expect(page1.locator("h1")).to_contain_text("Nouvelle recette")
             _fill_recipe_form(page1, recipe)
-            page1.click("#recipe-form button[type='submit']")
+            page1.click(".form-actions button[type='submit']")
             # Après création → redirect vers /recipes/{slug}
             page1.wait_for_url(
                 re.compile(rf"{re.escape(base_url)}/recipes/[a-z0-9\-]+$"),
@@ -279,7 +279,7 @@ class TestCampaign:
         for recipe in RECIPES_USER2:
             page2.goto(f"{base_url}/recipes/new")
             _fill_recipe_form(page2, recipe)
-            page2.click("#recipe-form button[type='submit']")
+            page2.click(".form-actions button[type='submit']")
             page2.wait_for_url(
                 re.compile(rf"{re.escape(base_url)}/recipes/[a-z0-9\-]+$"),
                 timeout=10_000,
@@ -359,7 +359,7 @@ class TestCampaign:
         page1.fill("#title",   "Tarte Tatin Revisitée")
         page1.fill("#summary", "Version allégée avec moins de beurre")
         page1.fill("#tags",    "dessert, fruit, pomme, allégé")
-        page1.click("#recipe-form button[type='submit']")
+        page1.click(".form-actions button[type='submit']")
 
         # Le slug ne change pas à la mise à jour
         page1.wait_for_url(f"{base_url}/recipes/{slug}", timeout=10_000)
@@ -380,7 +380,7 @@ class TestCampaign:
             "## Ingrédients\n\n- 500 g farine T65\n- 320 ml eau\n\n"
             "## Conseil\n\nUtiliser de la levure fraîche pour un meilleur goût.",
         )
-        page2.click("#recipe-form button[type='submit']")
+        page2.click(".form-actions button[type='submit']")
         page2.wait_for_url(f"{base_url}/recipes/{slug}", timeout=10_000)
         expect(page2.locator("h1")).to_have_text(RECIPES_USER2[0]["title"])
 
@@ -434,12 +434,12 @@ class TestCampaign:
         expect(image_list).to_contain_text("test_photo.png", timeout=8_000)
         _STATE["uploaded_image"] = "test_photo.png"
 
-    def test_17_image_visible_on_detail_page(self, page1: Page, base_url: str) -> None:
-        """L'image uploadée est rendue dans la galerie de la page de détail."""
+def test_17_image_visible_on_detail_page(self, page1: Page, base_url: str) -> None:
+        """The uploaded image is shown as the recipe cover."""
         slug = _STATE["user1_slugs"][2]
         page1.goto(f"{base_url}/recipes/{slug}")
-        gallery = page1.locator(".recipe-gallery img")
-        expect(gallery.first).to_be_visible(timeout=5_000)
+        cover = page1.locator("img.recipe-cover")
+        expect(cover).to_be_visible(timeout=5_000)
 
     def test_18_delete_image(self, page1: Page, base_url: str) -> None:
         """testcook1 supprime l'image uploadée ; la liste affiche 'Aucune image'."""

@@ -61,9 +61,14 @@ def delete_recipe_dir(slug: str) -> None:
         shutil.rmtree(recipe_dir)
 
 
+def safe_image_filename(filename: str) -> str:
+    """Sanitize an upload filename (keep in sync with editor.js)."""
+    return re.sub(r"[^\w.\-]", "_", Path(filename).name)
+
+
 def _safe_image_path(images_dir: Path, filename: str) -> Path:
     """Resolve the image path and assert it stays within images_dir."""
-    safe_name = re.sub(r"[^\w.\-]", "_", Path(filename).name)
+    safe_name = safe_image_filename(filename)
     dest = (images_dir / safe_name).resolve()
     try:
         dest.relative_to(images_dir.resolve())
@@ -104,11 +109,26 @@ def list_images(slug: str) -> list[str]:
     ]
 
 
-def get_cover_image_url(slug: str) -> Optional[str]:
+def get_cover_image_url(slug: str, preferred: str = "") -> Optional[str]:
     images = list_images(slug)
-    if images:
-        return f"/uploads/{slug}/images/{images[0]}"
-    return None
+    if not images:
+        return None
+    chosen = preferred if preferred in images else images[0]
+    return f"/uploads/{slug}/images/{chosen}"
+
+
+def gallery_filenames(
+    slug: str, content: str, cover_image: str = ""
+) -> list[str]:
+    """Images that are neither the cover nor already referenced in markdown."""
+    skip: set[str] = set()
+    cover = (cover_image or "").strip()
+    if cover:
+        skip.add(cover)
+    for filename in list_images(slug):
+        if f"images/{filename}" in content:
+            skip.add(filename)
+    return [filename for filename in list_images(slug) if filename not in skip]
 
 
 def fix_image_urls(html: str, slug: str) -> str:

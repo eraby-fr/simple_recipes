@@ -16,6 +16,7 @@ from app.storage import (
     delete_image,
     delete_recipe_dir,
     fix_image_urls,
+    gallery_filenames,
     get_cover_image_url,
     list_images,
     read_recipe_content,
@@ -130,7 +131,8 @@ async def _upsert_fts(
 
 def _row_to_out(row: aiosqlite.Row, tags: list[str]) -> RecipeOut:
     d = dict(row)
-    cover = get_cover_image_url(d["slug"])
+    cover_name = (d.get("cover_image") or "").strip()
+    cover = get_cover_image_url(d["slug"], cover_name)
     return RecipeOut(
         id=d["id"],
         slug=d["slug"],
@@ -141,8 +143,47 @@ def _row_to_out(row: aiosqlite.Row, tags: list[str]) -> RecipeOut:
         tags=tags,
         created_at=d["created_at"],
         updated_at=d["updated_at"],
+        prep_time=d.get("prep_time") or "",
+        cook_time=d.get("cook_time") or "",
+        wait_time=d.get("wait_time") or "",
+        servings=d.get("servings") or "",
+        cover_image=cover_name,
         cover_image_url=cover,
     )
+
+
+_IMAGE_TYPES = {
+    "image/jpeg", "image/png", "image/gif", "image/webp", "image/avif",
+}
+_MAX_IMAGE_BYTES = 20 * 1024 * 1024
+
+
+async def _store_uploads(
+    slug: str, files: list[UploadFile] | UploadFile | None
+) -> list[str]:
+    if files is None:
+        upload_list: list[UploadFile] = []
+    elif isinstance(files, list):
+        upload_list = files
+    else:
+        upload_list = [files]
+    saved: list[str] = []
+    for file in upload_list:
+        if file is None or not (file.filename or "").strip():
+            continue
+        if file.content_type not in _IMAGE_TYPES:
+            raise HTTPException(
+                status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail="Type d'image non supporté",
+            )
+        data = await file.read()
+        if len(data) > _MAX_IMAGE_BYTES:
+            raise HTTPException(
+                status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="Image trop volumineuse (max 20 Mo)",
+            )
+        saved.append(save_image(slug, file.filename or "image.jpg", data))
+    return saved
 
 
 @router.get("", response_model=list[RecipeOut])
@@ -163,8 +204,7 @@ async def list_recipes(
             return []
         async with db.execute(
             """
-            SELECT r.id, r.slug, r.title, r.summary, r.author_id, r.created_at,
-                   r.updated_at, u.username AS author_username
+                SELECT r.*, u.username AS author_username
             FROM recipes_fts fts
             JOIN recipes r ON r.id = fts.recipe_id
             JOIN users u ON u.id = r.author_id
@@ -178,8 +218,7 @@ async def list_recipes(
     elif tag:
         async with db.execute(
             """
-            SELECT r.id, r.slug, r.title, r.summary, r.author_id, r.created_at,
-                   r.updated_at, u.username AS author_username
+                SELECT r.*, u.username AS author_username
             FROM recipes r
             JOIN users u ON u.id = r.author_id
             JOIN recipe_tags rt ON rt.recipe_id = r.id
@@ -194,8 +233,7 @@ async def list_recipes(
     else:
         async with db.execute(
             """
-            SELECT r.id, r.slug, r.title, r.summary, r.author_id, r.created_at,
-                   r.updated_at, u.username AS author_username
+                SELECT r.*, u.username AS author_username
             FROM recipes r
             JOIN users u ON u.id = r.author_id
             ORDER BY r.created_at DESC
@@ -226,10 +264,24 @@ async def create_recipe(
 
     await db.execute(
         """
-        INSERT INTO recipes (id, slug, title, summary, author_id)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO recipes (
+            id, slug, title, summary, author_id,
+            cover_image, prep_time, cook_time, wait_time, servings
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (recipe_id, slug, body.title.strip(), body.summary.strip(), current_user["id"]),
+        (
+            recipe_id,
+            slug,
+            body.title.strip(),
+            body.summary.strip(),
+            current_user["id"],
+            body.cover_image.strip(),
+            body.prep_time.strip(),
+            body.cook_time.strip(),
+            body.wait_time.strip(),
+            body.servings.strip(),
+        ),
     )
     await _upsert_tags(db, recipe_id, body.tags)
     await _upsert_fts(db, recipe_id, body.title, body.content, body.tags)
@@ -237,8 +289,7 @@ async def create_recipe(
 
     async with db.execute(
         """
-        SELECT r.id, r.slug, r.title, r.summary, r.author_id, r.created_at,
-               r.updated_at, u.username AS author_username
+                SELECT r.*, u.username AS author_username
         FROM recipes r JOIN users u ON u.id = r.author_id
         WHERE r.id = ?
         """,
@@ -257,8 +308,7 @@ async def get_recipe(
 ) -> RecipeDetail:
     async with db.execute(
         """
-        SELECT r.id, r.slug, r.title, r.summary, r.author_id, r.created_at,
-               r.updated_at, u.username AS author_username
+                SELECT r.*, u.username AS author_username
         FROM recipes r JOIN users u ON u.id = r.author_id
         WHERE r.slug = ?
         """,
@@ -303,6 +353,16 @@ async def update_recipe(
         updates["title"] = body.title.strip()
     if body.summary is not None:
         updates["summary"] = body.summary.strip()
+    if body.prep_time is not None:
+        updates["prep_time"] = body.prep_time.strip()
+    if body.cook_time is not None:
+        updates["cook_time"] = body.cook_time.strip()
+    if body.wait_time is not None:
+        updates["wait_time"] = body.wait_time.strip()
+    if body.servings is not None:
+        updates["servings"] = body.servings.strip()
+    if body.cover_image is not None:
+        updates["cover_image"] = body.cover_image.strip()
     if body.content is not None:
         write_recipe_content(slug, body.content)
 
@@ -333,8 +393,7 @@ async def update_recipe(
 
     async with db.execute(
         """
-        SELECT r.id, r.slug, r.title, r.summary, r.author_id, r.created_at,
-               r.updated_at, u.username AS author_username
+                SELECT r.*, u.username AS author_username
         FROM recipes r JOIN users u ON u.id = r.author_id
         WHERE r.id = ?
         """,
@@ -386,22 +445,7 @@ async def upload_image(
     if row["author_id"] != current_user["id"]:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Accès interdit")
 
-    if file.content_type not in {
-        "image/jpeg", "image/png", "image/gif", "image/webp", "image/avif"
-    }:
-        raise HTTPException(
-            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail="Type d'image non supporté",
-        )
-
-    data = await file.read()
-    if len(data) > 20 * 1024 * 1024:
-        raise HTTPException(
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="Image trop volumineuse (max 20 Mo)",
-        )
-
-    filename = save_image(slug, file.filename or "image.jpg", data)
+    filename = (await _store_uploads(slug, [file]))[0]
     url = f"/uploads/{slug}/images/{filename}"
     return {"filename": filename, "url": url}
 

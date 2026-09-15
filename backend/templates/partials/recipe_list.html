@@ -21,21 +21,21 @@
         {% if recipe.summary %}
         <p class="card-summary">{{ recipe.summary }}</p>
         {% endif %}
-        <div class="card-footer">
-          {% if recipe.tags %}
-          <div class="tags" aria-label="Tags">
-            {% for t in recipe.tags[:3] %}
-            <span class="tag">{{ t }}</span>
-            {% endfor %}
-            {% if recipe.tags | length > 3 %}
-            <span class="tag tag-more">+{{ recipe.tags | length - 3 }}</span>
-            {% endif %}
-          </div>
-          {% endif %}
-          <small class="card-author">{{ recipe.author_username }}</small>
-        </div>
       </div>
     </a>
+    <div class="card-footer">
+      {% if recipe.tags %}
+      <nav class="tags" aria-label="Tags">
+        {% for t in recipe.tags[:3] %}
+        <a href="/?tag={{ t | urlencode }}" class="tag">{{ t }}</a>
+        {% endfor %}
+        {% if recipe.tags | length > 3 %}
+        <span class="tag tag-more">+{{ recipe.tags | length - 3 }}</span>
+        {% endif %}
+      </nav>
+      {% endif %}
+      <small class="card-author">{{ recipe.author_username }}</small>
+    </div>
   </article>
   {% endfor %}
 </div>

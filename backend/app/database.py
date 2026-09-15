@@ -23,6 +23,11 @@ CREATE TABLE IF NOT EXISTS recipes (
     title TEXT NOT NULL,
     summary TEXT NOT NULL DEFAULT '',
     author_id INTEGER NOT NULL REFERENCES users(id),
+    cover_image TEXT NOT NULL DEFAULT '',
+    prep_time TEXT NOT NULL DEFAULT '',
+    cook_time TEXT NOT NULL DEFAULT '',
+    wait_time TEXT NOT NULL DEFAULT '',
+    servings TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -76,12 +81,31 @@ async def _migrate_user_roles(db: aiosqlite.Connection) -> None:
         )
 
 
+_RECIPE_META_COLUMNS = (
+    ("cover_image", "TEXT NOT NULL DEFAULT ''"),
+    ("prep_time", "TEXT NOT NULL DEFAULT ''"),
+    ("cook_time", "TEXT NOT NULL DEFAULT ''"),
+    ("wait_time", "TEXT NOT NULL DEFAULT ''"),
+    ("servings", "TEXT NOT NULL DEFAULT ''"),
+)
+
+
+async def _migrate_recipe_meta(db: aiosqlite.Connection) -> None:
+    """Add cover and timing columns on databases created before this schema."""
+    async with db.execute("PRAGMA table_info(recipes)") as cur:
+        columns = {row[1] async for row in cur}
+    for name, spec in _RECIPE_META_COLUMNS:
+        if name not in columns:
+            await db.execute(f"ALTER TABLE recipes ADD COLUMN {name} {spec}")
+
+
 async def init_db() -> None:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         await db.executescript(_SCHEMA)
         await _migrate_user_roles(db)
+        await _migrate_recipe_meta(db)
         await db.commit()
 
 

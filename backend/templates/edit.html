@@ -27,6 +27,7 @@
     method="post"
     class="recipe-form"
     id="recipe-form"
+    enctype="multipart/form-data"
   >
     <div class="form-grid-meta">
       <div class="form-group">
@@ -68,6 +69,53 @@
       </div>
     </div>
 
+    <div class="form-grid-times">
+      <div class="form-group">
+        <label for="prep_time">Préparation</label>
+        <input
+          type="text"
+          id="prep_time"
+          name="prep_time"
+          value="{{ recipe.prep_time if recipe else '' }}"
+          placeholder="15 min"
+          autocomplete="off"
+        >
+      </div>
+      <div class="form-group">
+        <label for="cook_time">Cuisson</label>
+        <input
+          type="text"
+          id="cook_time"
+          name="cook_time"
+          value="{{ recipe.cook_time if recipe else '' }}"
+          placeholder="1 h"
+          autocomplete="off"
+        >
+      </div>
+      <div class="form-group">
+        <label for="wait_time">Attente</label>
+        <input
+          type="text"
+          id="wait_time"
+          name="wait_time"
+          value="{{ recipe.wait_time if recipe else '' }}"
+          placeholder="8 h"
+          autocomplete="off"
+        >
+      </div>
+      <div class="form-group">
+        <label for="servings">Personnes</label>
+        <input
+          type="text"
+          id="servings"
+          name="servings"
+          value="{{ recipe.servings if recipe else '' }}"
+          placeholder="4"
+          autocomplete="off"
+        >
+      </div>
+    </div>
+
     <div class="editor-layout" id="editor-layout">
       <div class="editor-pane">
         <div class="editor-pane-header">
@@ -102,25 +150,25 @@
         {% endif %}
       </div>
     </div>
-
-    <div class="form-actions">
-      <button type="submit" class="btn-primary btn-lg">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-        {% if recipe %}Enregistrer les modifications{% else %}Créer la recette{% endif %}
-      </button>
-    </div>
   </form>
 
-  {% if recipe %}
+  <div class="form-actions">
+    <button type="submit" form="recipe-form" class="btn-primary btn-lg">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      {% if recipe %}Enregistrer les modifications{% else %}Créer la recette{% endif %}
+    </button>
+  </div>
+
   <section class="images-section" aria-label="Gestion des images">
     <h2>Images</h2>
     <p class="images-hint">
-      Uploadez des images puis copiez le lien Markdown pour les insérer dans votre recette.
-      Exemple : <code>![Description](images/photo.jpg)</code>
+      Ajoutez une ou plusieurs images. Le lien Markdown est inséré automatiquement.
+      Choisissez la photo de couverture.
     </p>
 
+    {% if recipe %}
     <div id="image-list">
-      {% with slug = recipe.slug %}
+      {% with slug = recipe.slug, cover_image = cover_image|default(recipe.cover_image) %}
       {% include "partials/image_list.html" %}
       {% endwith %}
     </div>
@@ -135,19 +183,37 @@
     >
       <label class="upload-label" for="file-upload">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
-        <span>Choisir une image</span>
-        <small>JPEG, PNG, GIF, WebP — max 20 Mo</small>
+        <span>Choisir des images</span>
+        <small>JPEG, PNG, GIF, WebP — max 20 Mo — plusieurs fichiers possibles</small>
         <input
           type="file"
           id="file-upload"
-          name="file"
+          name="files"
           accept="image/jpeg,image/png,image/gif,image/webp,image/avif"
-          aria-label="Choisir une image à uploader"
+          multiple
+          aria-label="Choisir des images à uploader"
         >
       </label>
     </form>
+    {% else %}
+    <input type="hidden" form="recipe-form" name="cover_image" id="cover-image-input" value="">
+    <div id="image-list" class="pending-image-list"></div>
+    <label class="upload-label" for="file-upload">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+      <span>Choisir des images</span>
+      <small>JPEG, PNG, GIF, WebP — max 20 Mo — plusieurs fichiers possibles</small>
+      <input
+        type="file"
+        id="file-upload"
+        name="files"
+        form="recipe-form"
+        accept="image/jpeg,image/png,image/gif,image/webp,image/avif"
+        multiple
+        aria-label="Choisir des images à uploader"
+      >
+    </label>
+    {% endif %}
   </section>
-  {% endif %}
 </div>
 {% endblock %}
 
