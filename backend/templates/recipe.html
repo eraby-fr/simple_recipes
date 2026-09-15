@@ -45,12 +45,29 @@
       <span>{{ recipe.author_username }}</span>
       <span class="sep" aria-hidden="true">&middot;</span>
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-      <time datetime="{{ recipe.created_at.isoformat() }}">{{ recipe.created_at.strftime('%d %B %Y') }}</time>
+      <time datetime="{{ recipe.created_at.isoformat() }}">{{ recipe.created_at | date_fr }}</time>
       {% if recipe.updated_at != recipe.created_at %}
       <span class="sep" aria-hidden="true">&middot;</span>
-      <span class="updated">modifié le <time datetime="{{ recipe.updated_at.isoformat() }}">{{ recipe.updated_at.strftime('%d %B %Y') }}</time></span>
+      <span class="updated">modifié le <time datetime="{{ recipe.updated_at.isoformat() }}">{{ recipe.updated_at | date_fr }}</time></span>
       {% endif %}
     </p>
+
+    {% if recipe.prep_time or recipe.cook_time or recipe.wait_time or recipe.servings %}
+    <ul class="recipe-times" aria-label="Temps et portions">
+      {% if recipe.prep_time %}
+      <li><span>Préparation</span> {{ recipe.prep_time }}</li>
+      {% endif %}
+      {% if recipe.cook_time %}
+      <li><span>Cuisson</span> {{ recipe.cook_time }}</li>
+      {% endif %}
+      {% if recipe.wait_time %}
+      <li><span>Attente</span> {{ recipe.wait_time }}</li>
+      {% endif %}
+      {% if recipe.servings %}
+      <li><span>Personnes</span> {{ recipe.servings }}</li>
+      {% endif %}
+    </ul>
+    {% endif %}
   </header>
 
   {% if recipe.cover_image_url %}

@@ -1,7 +1,7 @@
 {% if images %}
 <div class="image-grid">
   {% for filename in images %}
-  <div class="image-item" id="img-{{ filename | replace('.', '-') | replace(' ', '_') }}">
+  <div class="image-item {% if filename == cover_image %}is-cover{% endif %}" id="img-{{ filename | replace('.', '-') | replace(' ', '_') }}">
     <div class="image-thumb">
       <img
         src="/uploads/{{ slug }}/images/{{ filename }}"
@@ -12,12 +12,24 @@
     <div class="image-actions">
       <button
         type="button"
+        class="btn-sm {% if filename == cover_image %}btn-primary{% else %}btn-outline{% endif %}"
+        hx-post="/recipes/{{ slug }}/cover"
+        hx-vals='{"filename": "{{ filename }}"}'
+        hx-target="#image-list"
+        hx-swap="innerHTML"
+        title="Définir comme couverture"
+        aria-label="Définir {{ filename }} comme couverture"
+        {% if filename == cover_image %}aria-pressed="true"{% else %}aria-pressed="false"{% endif %}
+      >
+        {% if filename == cover_image %}Couverture{% else %}Définir{% endif %}
+      </button>
+      <button
+        type="button"
         class="btn-outline btn-sm copy-link-btn"
         onclick="copyMarkdownLink('{{ filename }}', this)"
         title="Copier le lien Markdown"
         aria-label="Copier le lien Markdown pour {{ filename }}"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
         Copier
       </button>
       <button

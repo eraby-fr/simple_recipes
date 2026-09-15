@@ -42,6 +42,11 @@ class RecipeCreate(BaseModel):
     content: str
     summary: str = ""
     tags: list[str] = []
+    prep_time: str = ""
+    cook_time: str = ""
+    wait_time: str = ""
+    servings: str = ""
+    cover_image: str = ""
 
     @field_validator("title")
     @classmethod
@@ -62,6 +67,11 @@ class RecipeUpdate(BaseModel):
     content: Optional[str] = None
     summary: Optional[str] = None
     tags: Optional[list[str]] = None
+    prep_time: Optional[str] = None
+    cook_time: Optional[str] = None
+    wait_time: Optional[str] = None
+    servings: Optional[str] = None
+    cover_image: Optional[str] = None
 
     @field_validator("tags")
     @classmethod
@@ -81,6 +91,11 @@ class RecipeOut(BaseModel):
     tags: list[str]
     created_at: datetime
     updated_at: datetime
+    prep_time: str = ""
+    cook_time: str = ""
+    wait_time: str = ""
+    servings: str = ""
+    cover_image: str = ""
     cover_image_url: Optional[str] = None
 
 

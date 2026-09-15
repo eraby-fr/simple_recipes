@@ -1,6 +1,12 @@
 (function () {
   "use strict";
 
+  // Keep in sync with app.storage.safe_image_filename
+  function safeImageFilename(name) {
+    name = String(name).split(/[/\\]/).pop();
+    return name.replace(/[^\w.\-]/g, "_");
+  }
+
   // ---------------------------------------------------------------------------
   // Tags preview
   // ---------------------------------------------------------------------------
@@ -72,6 +78,28 @@
     triggerPreview();
   };
 
+  function insertImageMarkdown(filename) {
+    const link = `![](images/${filename})`;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const needsNewline =
+      start > 0 && textarea.value.charAt(start - 1) !== "\n";
+    const block = (needsNewline ? "\n\n" : "") + link + "\n\n";
+    replaceSelection(block, start, textarea.selectionEnd);
+    textarea.selectionStart = textarea.selectionEnd = start + block.length;
+    triggerPreview();
+  }
+
+  function removeImageMarkdown(filename) {
+    if (!textarea) return;
+    const pattern = new RegExp(
+      `\\n?\\n?!\\[[^\\]]*\\]\\(images/${escapeRegExp(filename)}\\)\\n?`,
+      "g"
+    );
+    textarea.value = textarea.value.replace(pattern, "\n");
+    triggerPreview();
+  }
+
   // ---------------------------------------------------------------------------
   // Preview toggle (editor / split / preview only)
   // ---------------------------------------------------------------------------
@@ -95,7 +123,7 @@
   };
 
   // ---------------------------------------------------------------------------
-  // Textarea: auto-grow + tab key support
+  // Textarea: tab key support
   // ---------------------------------------------------------------------------
   if (textarea) {
     textarea.addEventListener("keydown", function (e) {
@@ -113,21 +141,111 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Image upload: trigger on file select
+  // Image upload: auto-insert markdown; HTMX on edit, pending files on create
   // ---------------------------------------------------------------------------
   const fileInput = document.getElementById("file-upload");
   const uploadForm = document.getElementById("upload-form");
+  const coverInput = document.getElementById("cover-image-input");
+  const pendingList = document.querySelector(".pending-image-list");
+  const isCreateMode = Boolean(coverInput);
+  let pendingFiles = [];
 
-  if (fileInput && uploadForm) {
+  function syncPendingInput() {
+    if (!fileInput || !isCreateMode) return;
+    const dt = new DataTransfer();
+    pendingFiles.forEach((f) => dt.items.add(f));
+    fileInput.files = dt.files;
+  }
+
+  function setPendingCover(filename) {
+    if (coverInput) coverInput.value = filename;
+    renderPending();
+  }
+
+  function renderPending() {
+    if (!pendingList) return;
+    if (!pendingFiles.length) {
+      pendingList.innerHTML =
+        '<p class="no-images">Aucune image pour cette recette.</p>';
+      return;
+    }
+    const cover = coverInput ? coverInput.value : "";
+    pendingList.innerHTML =
+      '<div class="image-grid">' +
+      pendingFiles
+        .map((file) => {
+          const name = safeImageFilename(file.name);
+          const url = URL.createObjectURL(file);
+          const isCover = cover === name;
+          return `<div class="image-item ${isCover ? "is-cover" : ""}">
+            <div class="image-thumb"><img src="${url}" alt="${escapeHtml(name)}"></div>
+            <div class="image-actions">
+              <button type="button" class="btn-sm ${isCover ? "btn-primary" : "btn-outline"}"
+                data-cover="${escapeHtml(name)}">${isCover ? "Couverture" : "Définir"}</button>
+              <button type="button" class="btn-danger btn-sm" data-remove="${escapeHtml(name)}" aria-label="Retirer ${escapeHtml(name)}">×</button>
+            </div>
+            <code class="image-ref">![](images/${escapeHtml(name)})</code>
+          </div>`;
+        })
+        .join("") +
+      "</div>";
+  }
+
+  if (pendingList) {
+    pendingList.addEventListener("click", function (e) {
+      const coverBtn = e.target.closest("[data-cover]");
+      if (coverBtn) {
+        setPendingCover(coverBtn.getAttribute("data-cover"));
+        return;
+      }
+      const removeBtn = e.target.closest("[data-remove]");
+      if (removeBtn) {
+        const name = removeBtn.getAttribute("data-remove");
+        pendingFiles = pendingFiles.filter(
+          (f) => safeImageFilename(f.name) !== name
+        );
+        removeImageMarkdown(name);
+        if (coverInput && coverInput.value === name) {
+          coverInput.value = pendingFiles.length
+            ? safeImageFilename(pendingFiles[0].name)
+            : "";
+        }
+        syncPendingInput();
+        renderPending();
+      }
+    });
+  }
+
+  if (fileInput) {
     fileInput.addEventListener("change", function () {
-      if (fileInput.files.length > 0) {
+      const selected = Array.from(fileInput.files || []);
+      if (!selected.length) return;
+
+      selected.forEach((file) => {
+        insertImageMarkdown(safeImageFilename(file.name));
+      });
+
+      if (isCreateMode) {
+        selected.forEach((file) => pendingFiles.push(file));
+        if (coverInput && !coverInput.value && pendingFiles.length) {
+          coverInput.value = safeImageFilename(pendingFiles[0].name);
+        }
+        syncPendingInput();
+        renderPending();
+        return;
+      }
+
+      if (uploadForm) {
         uploadForm.dispatchEvent(new Event("submit", { bubbles: true }));
-        // Reset input so same file can be re-selected
         setTimeout(() => {
           fileInput.value = "";
         }, 500);
       }
     });
+  }
+
+  if (isCreateMode) {
+    renderPending();
   }
 
   // ---------------------------------------------------------------------------
@@ -136,20 +254,11 @@
   window.copyMarkdownLink = function (filename, btn) {
     const link = `![](images/${filename})`;
 
-    if (textarea) {
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      replaceSelection(link, start, end);
-      textarea.selectionStart = textarea.selectionEnd = start + link.length;
-      textarea.focus();
-      triggerPreview();
-    }
-
+    insertImageMarkdown(filename);
     navigator.clipboard.writeText(link).catch(() => {});
 
     const originalText = btn.innerHTML;
-    btn.innerHTML =
-      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg> Copié !';
+    btn.textContent = "Copié !";
     btn.classList.add("btn-primary");
     btn.classList.remove("btn-outline");
     setTimeout(() => {
@@ -163,6 +272,7 @@
   // Helpers
   // ---------------------------------------------------------------------------
   function replaceSelection(text, start, end) {
+    if (!textarea) return;
     textarea.value =
       textarea.value.substring(0, start) +
       text +
@@ -175,10 +285,14 @@
   }
 
   function escapeHtml(str) {
-    return str
+    return String(str)
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
+  }
+
+  function escapeRegExp(str) {
+    return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 })();

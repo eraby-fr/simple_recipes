@@ -29,12 +29,14 @@ from app.auth import (
 )
 from app.config import settings
 from app.database import get_db
+from app.formatting import format_date_fr
 from app.routes.api_recipes import (
     _ensure_unique_slug,
     _get_recipe_tags,
     _render_markdown,
     _row_to_out,
     _sanitize_html,
+    _store_uploads,
     _upsert_fts,
     _upsert_tags,
 )
@@ -42,9 +44,10 @@ from app.schemas import RecipeOut
 from app.storage import (
     delete_image,
     delete_recipe_dir,
+    gallery_filenames,
     list_images,
     read_recipe_content,
-    save_image,
+    safe_image_filename,
     slugify,
     validate_slug,
     write_recipe_content,
@@ -76,6 +79,7 @@ def _valid_slug(slug: str) -> str:
 
 router = APIRouter(tags=["pages"])
 templates = Jinja2Templates(directory="templates")
+templates.env.filters["date_fr"] = format_date_fr
 
 _MD_EXTENSIONS = ["extra", "sane_lists", "toc"]
 
@@ -448,6 +452,12 @@ async def create_recipe_page(
     summary: str = Form(default=""),
     tags_raw: str = Form(default="", alias="tags"),
     content: str = Form(default=""),
+    prep_time: str = Form(default=""),
+    cook_time: str = Form(default=""),
+    wait_time: str = Form(default=""),
+    servings: str = Form(default=""),
+    cover_image: str = Form(default=""),
+    files: Optional[list[UploadFile]] = File(default=None),
     db: aiosqlite.Connection = Depends(get_db),
     current_user: Optional[dict] = Depends(get_current_user_optional),
 ) -> HTMLResponse:
@@ -473,10 +483,28 @@ async def create_recipe_page(
     slug = await _ensure_unique_slug(db, base_slug)
 
     write_recipe_content(slug, content)
+    saved = await _store_uploads(slug, files or [])
+    cover = _resolve_cover_filename(cover_image, saved)
 
     await db.execute(
-        "INSERT INTO recipes (id, slug, title, summary, author_id) VALUES (?, ?, ?, ?, ?)",
-        (recipe_id, slug, title, summary.strip(), current_user["id"]),
+        """
+        INSERT INTO recipes (
+            id, slug, title, summary, author_id,
+            cover_image, prep_time, cook_time, wait_time, servings
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            recipe_id,
+            slug,
+            title,
+            summary.strip(),
+            current_user["id"],
+            cover,
+            prep_time.strip(),
+            cook_time.strip(),
+            wait_time.strip(),
+            servings.strip(),
+        ),
     )
     await _upsert_tags(db, recipe_id, tag_names)
     await _upsert_fts(db, recipe_id, title, content, tag_names)
@@ -501,8 +529,7 @@ async def recipe_detail(
         return _redirect("/login")
     async with db.execute(
         """
-        SELECT r.id, r.slug, r.title, r.summary, r.author_id, r.created_at,
-               r.updated_at, u.username AS author_username
+        SELECT r.*, u.username AS author_username
         FROM recipes r JOIN users u ON u.id = r.author_id
         WHERE r.slug = ?
         """,
@@ -515,13 +542,14 @@ async def recipe_detail(
 
     tags = await _get_recipe_tags(db, row["id"])
     raw = read_recipe_content(slug)
-    images = list_images(slug)
+    recipe = _row_to_out(row, tags)
+    images = gallery_filenames(slug, raw, recipe.cover_image)
 
     return templates.TemplateResponse(
         "recipe.html",
         {
             "request": request,
-            "recipe": _row_to_out(row, tags),
+            "recipe": recipe,
             "content_html": _render_markdown(raw, slug),
             "images": images,
             "current_user": current_user,
@@ -547,8 +575,7 @@ async def edit_recipe_page(
         return _redirect("/login")
     async with db.execute(
         """
-        SELECT r.id, r.slug, r.title, r.summary, r.author_id, r.created_at,
-               r.updated_at, u.username AS author_username
+        SELECT r.*, u.username AS author_username
         FROM recipes r JOIN users u ON u.id = r.author_id
         WHERE r.slug = ?
         """,
@@ -565,16 +592,18 @@ async def edit_recipe_page(
     raw = read_recipe_content(slug)
     images = list_images(slug)
     content_html = _render_markdown(raw, slug)
+    recipe = _row_to_out(row, tags)
 
     return templates.TemplateResponse(
         "edit.html",
         {
             "request": request,
             "current_user": current_user,
-            "recipe": _row_to_out(row, tags),
+            "recipe": recipe,
             "raw_content": raw,
             "content_html": content_html,
             "images": images,
+            "cover_image": recipe.cover_image,
             "error": None,
         },
     )
@@ -588,6 +617,10 @@ async def update_recipe_page(
     summary: str = Form(default=""),
     tags_raw: str = Form(default="", alias="tags"),
     content: str = Form(default=""),
+    prep_time: str = Form(default=""),
+    cook_time: str = Form(default=""),
+    wait_time: str = Form(default=""),
+    servings: str = Form(default=""),
     db: aiosqlite.Connection = Depends(get_db),
     current_user: Optional[dict] = Depends(get_current_user_optional),
 ) -> HTMLResponse:
@@ -612,10 +645,19 @@ async def update_recipe_page(
     await db.execute(
         """
         UPDATE recipes
-        SET title = ?, summary = ?, updated_at = datetime('now')
+        SET title = ?, summary = ?, prep_time = ?, cook_time = ?,
+            wait_time = ?, servings = ?, updated_at = datetime('now')
         WHERE id = ?
         """,
-        (title, summary.strip(), recipe_id),
+        (
+            title,
+            summary.strip(),
+            prep_time.strip(),
+            cook_time.strip(),
+            wait_time.strip(),
+            servings.strip(),
+            recipe_id,
+        ),
     )
     await _upsert_tags(db, recipe_id, tag_names)
     await _upsert_fts(db, recipe_id, title, content, tag_names)
@@ -665,7 +707,38 @@ async def delete_recipe_page(
 async def upload_image_page(
     request: Request,
     slug: str = Depends(_valid_slug),
-    file: UploadFile = File(...),
+    files: Optional[list[UploadFile]] = File(default=None),
+    db: aiosqlite.Connection = Depends(get_db),
+    current_user: Optional[dict] = Depends(get_current_user_optional),
+) -> HTMLResponse:
+    if not current_user:
+        return _htmx_redirect("/login")
+    async with db.execute(
+        "SELECT author_id, cover_image FROM recipes WHERE slug = ?", (slug,)
+    ) as cur:
+        row = await cur.fetchone()
+
+    if not row or row["author_id"] != current_user["id"]:
+        raise HTTPException(status.HTTP_403_FORBIDDEN)
+
+    saved = await _store_uploads(slug, files or [])
+    cover = (row["cover_image"] or "").strip()
+    if not cover and saved:
+        cover = saved[0]
+        await db.execute(
+            "UPDATE recipes SET cover_image = ? WHERE slug = ?",
+            (cover, slug),
+        )
+        await db.commit()
+
+    return await _image_list_response(request, db, slug)
+
+
+@router.post("/recipes/{slug}/cover", response_class=HTMLResponse)
+async def set_cover_page(
+    request: Request,
+    slug: str = Depends(_valid_slug),
+    filename: str = Form(...),
     db: aiosqlite.Connection = Depends(get_db),
     current_user: Optional[dict] = Depends(get_current_user_optional),
 ) -> HTMLResponse:
@@ -679,28 +752,16 @@ async def upload_image_page(
     if not row or row["author_id"] != current_user["id"]:
         raise HTTPException(status.HTTP_403_FORBIDDEN)
 
-    if file.content_type not in {
-        "image/jpeg", "image/png", "image/gif", "image/webp", "image/avif"
-    }:
-        raise HTTPException(
-            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail="Type d'image non supporté",
-        )
+    safe_name = safe_image_filename(filename)
+    if safe_name not in list_images(slug):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Image introuvable")
 
-    data = await file.read()
-    if len(data) > 20 * 1024 * 1024:
-        raise HTTPException(
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="Image trop volumineuse (max 20 Mo)",
-        )
-
-    filename = save_image(slug, file.filename or "image.jpg", data)
-    images = list_images(slug)
-
-    return templates.TemplateResponse(
-        "partials/image_list.html",
-        {"request": request, "slug": slug, "images": images},
+    await db.execute(
+        "UPDATE recipes SET cover_image = ?, updated_at = datetime('now') WHERE slug = ?",
+        (safe_name, slug),
     )
+    await db.commit()
+    return await _image_list_response(request, db, slug)
 
 
 @router.delete("/recipes/{slug}/images/{filename}", response_class=HTMLResponse)
@@ -714,20 +775,21 @@ async def delete_image_page(
     if not current_user:
         return _htmx_redirect("/login")
     async with db.execute(
-        "SELECT author_id FROM recipes WHERE slug = ?", (slug,)
+        "SELECT author_id, cover_image FROM recipes WHERE slug = ?", (slug,)
     ) as cur:
         row = await cur.fetchone()
 
     if not row or row["author_id"] != current_user["id"]:
         raise HTTPException(status.HTTP_403_FORBIDDEN)
 
-    delete_image(slug, filename)
-    images = list_images(slug)
+    if (row["cover_image"] or "") == filename:
+        await db.execute(
+            "UPDATE recipes SET cover_image = '' WHERE slug = ?", (slug,)
+        )
+        await db.commit()
 
-    return templates.TemplateResponse(
-        "partials/image_list.html",
-        {"request": request, "slug": slug, "images": images},
-    )
+    delete_image(slug, filename)
+    return await _image_list_response(request, db, slug)
 
 
 # ---------------------------------------------------------------------------
@@ -752,6 +814,36 @@ async def markdown_preview(
 # ---------------------------------------------------------------------------
 
 
+def _resolve_cover_filename(requested: str, saved: list[str]) -> str:
+    requested = (requested or "").strip()
+    if requested:
+        safe = safe_image_filename(requested)
+        if safe in saved:
+            return safe
+        if requested in saved:
+            return requested
+    return saved[0] if saved else ""
+
+
+async def _image_list_response(
+    request: Request, db: aiosqlite.Connection, slug: str
+) -> HTMLResponse:
+    async with db.execute(
+        "SELECT cover_image FROM recipes WHERE slug = ?", (slug,)
+    ) as cur:
+        row = await cur.fetchone()
+    cover = (row["cover_image"] if row else "") or ""
+    return templates.TemplateResponse(
+        "partials/image_list.html",
+        {
+            "request": request,
+            "slug": slug,
+            "images": list_images(slug),
+            "cover_image": cover,
+        },
+    )
+
+
 async def _fetch_recipes(
     db: aiosqlite.Connection,
     q: Optional[str] = None,
@@ -767,8 +859,7 @@ async def _fetch_recipes(
         if escaped:
             async with db.execute(
                 """
-                SELECT r.id, r.slug, r.title, r.summary, r.author_id, r.created_at,
-                       r.updated_at, u.username AS author_username
+                SELECT r.*, u.username AS author_username
                 FROM recipes_fts fts
                 JOIN recipes r ON r.id = fts.recipe_id
                 JOIN users u ON u.id = r.author_id
@@ -782,8 +873,7 @@ async def _fetch_recipes(
     elif tag:
         async with db.execute(
             """
-            SELECT r.id, r.slug, r.title, r.summary, r.author_id, r.created_at,
-                   r.updated_at, u.username AS author_username
+            SELECT r.*, u.username AS author_username
             FROM recipes r
             JOIN users u ON u.id = r.author_id
             JOIN recipe_tags rt ON rt.recipe_id = r.id
@@ -798,8 +888,7 @@ async def _fetch_recipes(
     else:
         async with db.execute(
             """
-            SELECT r.id, r.slug, r.title, r.summary, r.author_id, r.created_at,
-                   r.updated_at, u.username AS author_username
+            SELECT r.*, u.username AS author_username
             FROM recipes r
             JOIN users u ON u.id = r.author_id
             ORDER BY r.created_at DESC
