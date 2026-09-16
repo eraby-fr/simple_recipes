@@ -186,6 +186,18 @@ async def _store_uploads(
     return saved
 
 
+def build_fts_match_query(q: str) -> str:
+    """Turn free-text input into a safe FTS5 MATCH query.
+
+    Each token is wrapped in its own double-quoted phrase, so apostrophes,
+    colons, parentheses and other FTS5 query-syntax characters in the
+    user's input can never cause a syntax error (bound params don't protect
+    against this since FTS5 parses the *value*, not just the SQL).
+    """
+    tokens = re.findall(r"\w+", q, re.UNICODE)
+    return " ".join(f'"{t}"*' for t in tokens)
+
+
 @router.get("", response_model=list[RecipeOut])
 async def list_recipes(
     q: Optional[str] = Query(default=None),
@@ -199,8 +211,8 @@ async def list_recipes(
     results: list[RecipeOut] = []
 
     if q:
-        escaped = re.sub(r'["\*\(\)\:\^~]', " ", q).strip()
-        if not escaped:
+        match_query = build_fts_match_query(q)
+        if not match_query:
             return []
         async with db.execute(
             """
@@ -212,7 +224,7 @@ async def list_recipes(
             ORDER BY rank
             LIMIT ? OFFSET ?
             """,
-            (escaped + "*", page_size, offset),
+            (match_query, page_size, offset),
         ) as cur:
             rows = await cur.fetchall()
     elif tag:

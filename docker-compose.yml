@@ -16,6 +16,7 @@ services:
     environment:
       DATA_DIR: /app/data
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set in .env}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/docs"]
       interval: 30s
