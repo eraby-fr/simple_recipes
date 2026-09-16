@@ -38,7 +38,7 @@ make test
 
 # Or manually
 cd backend
-pip install -r requirements.txt pytest -q
+pip install -r requirements-dev.txt -q
 PYTHONPATH=. DATA_DIR=/tmp/simple-recipes-test \
   SECRET_KEY=test-secret-key-local-at-least-32-chars COOKIE_SECURE=false \
   pytest tests/ -v
@@ -62,7 +62,7 @@ push / pull_request (all branches)
     └─ ubuntu-latest
         ├─ actions/checkout@v4
         ├─ actions/setup-python@v5  (Python 3.12, pip cache)
-        ├─ pip install -r requirements.txt pytest
+        ├─ pip install -r requirements-dev.txt
         └─ pytest tests/ -v
 ```
 
@@ -173,6 +173,15 @@ make up            # Start via Docker Compose (production-like)
 # E2E tests (Docker required)
 pytest tests/test_campaign.py -v --browser chromium -p no:randomly
 ```
+
+---
+
+## Test dependencies
+
+`backend/requirements-dev.txt` pulls in the runtime requirements plus the
+test-only ones. `httpx2` matters: `starlette.testclient` raises at import time
+without it, so the whole suite errors during collection rather than failing a
+single test.
 
 ---
 

@@ -59,7 +59,7 @@ dev-assets: ## Download HTMX and Pico.css for local development (digest-checked)
 
 test: ## Run unit tests locally (requires Python 3.12+)
 	@cd backend && \
-		pip install -r requirements.txt pytest -q && \
+		pip install -r requirements-dev.txt -q && \
 		PYTHONPATH=. DATA_DIR=/tmp/simple-recipes-test \
 		SECRET_KEY=test-secret-key-local-at-least-32-chars COOKIE_SECURE=false \
 		pytest tests/ -v
