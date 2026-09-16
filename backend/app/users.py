@@ -10,6 +10,7 @@ ROLE_USER = "user"
 STATUS_PENDING = "pending"
 STATUS_APPROVED = "approved"
 STATUS_REJECTED = "rejected"
+STATUS_SUSPENDED = "suspended"
 
 
 class UsernameTaken(Exception):
@@ -21,6 +22,8 @@ def login_block_reason(status: Optional[str]) -> Optional[str]:
         return "Votre compte est en attente d'approbation"
     if status == STATUS_REJECTED:
         return "Votre compte a été refusé"
+    if status == STATUS_SUSPENDED:
+        return "Votre compte a été suspendu"
     if status != STATUS_APPROVED:
         return "Votre compte n'est pas autorisé à se connecter"
     return None
@@ -94,9 +97,11 @@ async def set_user_status(
     user_id: int,
     account_status: str,
 ) -> None:
+    """Change an account status, revoking its live sessions when it loses access."""
+    revoke = account_status != STATUS_APPROVED
     await db.execute(
-        "UPDATE users SET status = ? WHERE id = ?",
-        (account_status, user_id),
+        "UPDATE users SET status = ?, token_version = token_version + ? WHERE id = ?",
+        (account_status, 1 if revoke else 0, user_id),
     )
     await db.commit()
 
@@ -106,8 +111,34 @@ async def set_user_role(
     user_id: int,
     role: str,
 ) -> None:
+    """Change an account role, revoking its live sessions so the new role applies."""
     await db.execute(
-        "UPDATE users SET role = ? WHERE id = ?",
+        "UPDATE users SET role = ?, token_version = token_version + 1 WHERE id = ?",
         (role, user_id),
     )
     await db.commit()
+
+
+async def bump_token_version(db: aiosqlite.Connection, user_id: int) -> None:
+    """Invalidate every access token already issued to this user."""
+    await db.execute(
+        "UPDATE users SET token_version = token_version + 1 WHERE id = ?",
+        (user_id,),
+    )
+    await db.commit()
+
+
+async def get_token_version(db: aiosqlite.Connection, user_id: int) -> int:
+    async with db.execute(
+        "SELECT token_version FROM users WHERE id = ?", (user_id,)
+    ) as cur:
+        row = await cur.fetchone()
+    return int(row["token_version"]) if row else 0
+
+
+async def count_admins(db: aiosqlite.Connection) -> int:
+    async with db.execute(
+        "SELECT COUNT(*) AS n FROM users WHERE role = ? AND status = ?",
+        (ROLE_ADMIN, STATUS_APPROVED),
+    ) as cur:
+        return int((await cur.fetchone())["n"])

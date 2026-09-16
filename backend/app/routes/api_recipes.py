@@ -156,6 +156,30 @@ _IMAGE_TYPES = {
     "image/jpeg", "image/png", "image/gif", "image/webp", "image/avif",
 }
 _MAX_IMAGE_BYTES = 20 * 1024 * 1024
+_MAX_FILES_PER_REQUEST = 20
+_UPLOAD_CHUNK_BYTES = 64 * 1024
+
+
+async def _read_capped(file: UploadFile, max_bytes: int) -> bytes:
+    """Read an upload in chunks, giving up as soon as it exceeds max_bytes.
+
+    Reading the whole file first and checking its length afterwards would let a
+    single request pull an arbitrary amount of data into memory.
+    """
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(_UPLOAD_CHUNK_BYTES)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(
+                status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="Image trop volumineuse (max 20 Mo)",
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 async def _store_uploads(
@@ -167,22 +191,31 @@ async def _store_uploads(
         upload_list = files
     else:
         upload_list = [files]
+
+    named = [f for f in upload_list if f is not None and (f.filename or "").strip()]
+    if len(named) > _MAX_FILES_PER_REQUEST:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Trop d'images en une seule fois (max {_MAX_FILES_PER_REQUEST})",
+        )
+
     saved: list[str] = []
-    for file in upload_list:
-        if file is None or not (file.filename or "").strip():
-            continue
+    for file in named:
         if file.content_type not in _IMAGE_TYPES:
             raise HTTPException(
                 status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
                 detail="Type d'image non supporté",
             )
-        data = await file.read()
-        if len(data) > _MAX_IMAGE_BYTES:
+        data = await _read_capped(file, _MAX_IMAGE_BYTES)
+        try:
+            # save_image re-checks the file signature: the declared type above
+            # is only a cheap pre-filter.
+            saved.append(save_image(slug, file.filename or "image.jpg", data))
+        except ValueError:
             raise HTTPException(
-                status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail="Image trop volumineuse (max 20 Mo)",
+                status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail="Type d'image non supporté",
             )
-        saved.append(save_image(slug, file.filename or "image.jpg", data))
     return saved
 
 

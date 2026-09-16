@@ -20,11 +20,15 @@ jobs:
       # Extract version from branch name: release/1.2.3 → 1.2.3
       - name: Extract version
         id: vars
+        env:
+          # Passed through the environment rather than interpolated into the
+          # script body, which would allow shell injection via the context.
+          REPOSITORY: ${{ github.repository }}
         run: |
           VERSION="${GITHUB_REF#refs/heads/release/}"
           echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
           # Image name must be lowercase for ghcr.io
-          REPO_LC="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          REPO_LC="$(echo "$REPOSITORY" | tr '[:upper:]' '[:lower:]')"
           echo "IMAGE=ghcr.io/${REPO_LC}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GitHub Container Registry (ghcr.io)

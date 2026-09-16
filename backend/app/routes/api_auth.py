@@ -11,7 +11,7 @@ from app.auth import (
 from app.config import settings
 from app.database import get_db
 from app.schemas import UserCreate
-from app.users import login_block_reason
+from app.users import bump_token_version, login_block_reason
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -35,7 +35,8 @@ async def login(
     db: aiosqlite.Connection = Depends(get_db),
 ) -> dict:
     async with db.execute(
-        "SELECT id, username, hashed_password, status FROM users WHERE username = ?",
+        "SELECT id, username, hashed_password, status, token_version "
+        "FROM users WHERE username = ?",
         (body.username,),
     ) as cur:
         row = await cur.fetchone()
@@ -50,7 +51,11 @@ async def login(
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail=blocked)
 
     token = create_access_token(
-        {"sub": str(row["id"]), "username": row["username"]},
+        {
+            "sub": str(row["id"]),
+            "username": row["username"],
+            "ver": int(row["token_version"] or 0),
+        },
     )
     response.set_cookie(
         key="access_token",
@@ -66,7 +71,15 @@ async def login(
 @router.post("/logout")
 async def logout(
     response: Response,
-    _: dict = Depends(get_current_user),
+    db: aiosqlite.Connection = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ) -> dict:
-    response.delete_cookie("access_token")
+    # Revoke the token itself, not just the browser's copy of it.
+    await bump_token_version(db, current_user["id"])
+    response.delete_cookie(
+        "access_token",
+        httponly=True,
+        samesite="lax",
+        secure=settings.cookie_secure,
+    )
     return {"message": "Déconnecté"}

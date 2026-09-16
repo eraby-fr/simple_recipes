@@ -66,7 +66,7 @@ def docker_container():
     ready = False
     while time.time() < deadline:
         try:
-            if requests.get(f"{BASE_URL}/", timeout=2).status_code == 200:
+            if requests.get(f"{BASE_URL}/healthz", timeout=2).status_code == 200:
                 ready = True
                 break
         except Exception:

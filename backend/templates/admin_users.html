@@ -5,7 +5,7 @@
 {% block main %}
 <div class="admin-page">
   <h1>Gestion des comptes</h1>
-  <p class="admin-lead">Approuvez les inscriptions et attribuez le rôle administrateur.</p>
+  <p class="admin-lead">Approuvez les inscriptions, attribuez le rôle administrateur et suspendez les comptes compromis.</p>
 
   {% if error %}
   <div class="alert alert-error" role="alert">
@@ -41,6 +41,8 @@
             <span class="badge badge-pending">En attente</span>
             {% elif user.status == "approved" %}
             <span class="badge badge-approved">Approuvé</span>
+            {% elif user.status == "suspended" %}
+            <span class="badge badge-rejected">Suspendu</span>
             {% else %}
             <span class="badge badge-rejected">Refusé</span>
             {% endif %}
@@ -54,9 +56,26 @@
             <form action="/admin/users/{{ user.id }}/reject" method="post">
               <button type="submit" class="btn-danger">Refuser</button>
             </form>
-            {% elif user.status == "approved" and user.role != "admin" %}
+            {% elif user.status == "approved" %}
+            {% if user.role != "admin" %}
             <form action="/admin/users/{{ user.id }}/make-admin" method="post">
               <button type="submit" class="btn-outline">Rendre admin</button>
+            </form>
+            {% elif user.id != current_user.id %}
+            <form action="/admin/users/{{ user.id }}/revoke-admin" method="post">
+              <button type="submit" class="btn-outline">Retirer admin</button>
+            </form>
+            {% endif %}
+            {% if user.id != current_user.id %}
+            <form action="/admin/users/{{ user.id }}/suspend" method="post">
+              <button type="submit" class="btn-danger">Suspendre</button>
+            </form>
+            {% else %}
+            <span class="badge badge-user">Vous</span>
+            {% endif %}
+            {% elif user.status in ("suspended", "rejected") %}
+            <form action="/admin/users/{{ user.id }}/restore" method="post">
+              <button type="submit" class="btn-primary">Réactiver</button>
             </form>
             {% else %}
             —

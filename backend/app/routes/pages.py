@@ -1,5 +1,4 @@
-from __future__ import annotations
-
+import logging
 from typing import Optional
 
 import uuid
@@ -11,6 +10,7 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Query,
     Request,
     UploadFile,
     status,
@@ -54,10 +54,14 @@ from app.storage import (
 )
 from app.users import (
     ROLE_ADMIN,
+    ROLE_USER,
     STATUS_APPROVED,
     STATUS_PENDING,
     STATUS_REJECTED,
+    STATUS_SUSPENDED,
     UsernameTaken,
+    bump_token_version,
+    count_admins,
     create_registered_user,
     get_user_by_id,
     list_users,
@@ -65,6 +69,20 @@ from app.users import (
     set_user_role,
     set_user_status,
 )
+from app.validation import (
+    MAX_CONTENT_LENGTH,
+    MAX_META_LENGTH,
+    MAX_PASSWORD_LENGTH,
+    MAX_SUMMARY_LENGTH,
+    MAX_TITLE_LENGTH,
+    MAX_USERNAME_LENGTH,
+    MIN_PASSWORD_LENGTH,
+    MIN_USERNAME_LENGTH,
+    clamp,
+    parse_tags,
+)
+
+security_log = logging.getLogger("simple_recipes.security")
 
 
 _limiter = Limiter(key_func=get_remote_address)
@@ -118,6 +136,7 @@ async def login_page(
     if current_user:
         return _redirect("/")
     return templates.TemplateResponse(
+        request,
         "login.html",
         {
             "request": request,
@@ -137,13 +156,18 @@ async def login_submit(
     db: aiosqlite.Connection = Depends(get_db),
 ) -> HTMLResponse:
     async with db.execute(
-        "SELECT id, username, hashed_password, status FROM users WHERE username = ?",
+        "SELECT id, username, hashed_password, status, token_version "
+        "FROM users WHERE username = ?",
         (username,),
     ) as cur:
         row = await cur.fetchone()
 
     if not row or not verify_password(password, row["hashed_password"]):
+        security_log.warning(
+            "login failed user=%r ip=%s", username[:64], get_remote_address(request)
+        )
         return templates.TemplateResponse(
+            request,
             "login.html",
             {
                 "request": request,
@@ -156,7 +180,12 @@ async def login_submit(
 
     blocked = login_block_reason(row["status"])
     if blocked:
+        security_log.warning(
+            "login blocked user=%r status=%s ip=%s",
+            username[:64], row["status"], get_remote_address(request),
+        )
         return templates.TemplateResponse(
+            request,
             "login.html",
             {
                 "request": request,
@@ -167,7 +196,16 @@ async def login_submit(
             status_code=status.HTTP_403_FORBIDDEN,
         )
 
-    token = create_access_token({"sub": str(row["id"]), "username": row["username"]})
+    token = create_access_token(
+        {
+            "sub": str(row["id"]),
+            "username": row["username"],
+            "ver": int(row["token_version"] or 0),
+        }
+    )
+    security_log.info(
+        "login ok user_id=%s ip=%s", row["id"], get_remote_address(request)
+    )
     resp = _redirect("/")
     resp.set_cookie(
         key="access_token",
@@ -188,6 +226,7 @@ async def register_page(
     if current_user:
         return _redirect("/")
     return templates.TemplateResponse(
+        request,
         "register.html",
         {
             "request": request,
@@ -209,13 +248,16 @@ async def register_submit(
     username = username.strip()
     error: Optional[str] = None
 
-    if len(username) < 3 or len(username) > 32:
+    if len(username) < MIN_USERNAME_LENGTH or len(username) > MAX_USERNAME_LENGTH:
         error = "Le nom d'utilisateur doit faire entre 3 et 32 caractères"
-    elif len(password) < 8:
+    elif len(password) < MIN_PASSWORD_LENGTH:
         error = "Le mot de passe doit faire au moins 8 caractères"
+    elif len(password) > MAX_PASSWORD_LENGTH:
+        error = "Le mot de passe ne peut pas dépasser 128 caractères"
 
     if error:
         return templates.TemplateResponse(
+            request,
             "register.html",
             {
                 "request": request,
@@ -231,6 +273,7 @@ async def register_submit(
         created = await create_registered_user(db, username, hashed)
     except UsernameTaken:
         return templates.TemplateResponse(
+            request,
             "register.html",
             {
                 "request": request,
@@ -243,6 +286,7 @@ async def register_submit(
     if created["status"] == STATUS_APPROVED:
         return _redirect("/login")
     return templates.TemplateResponse(
+        request,
         "register.html",
         {
             "request": request,
@@ -257,7 +301,15 @@ async def register_submit(
 
 
 @router.post("/logout")
-async def logout() -> RedirectResponse:
+async def logout(
+    db: aiosqlite.Connection = Depends(get_db),
+    current_user: Optional[dict] = Depends(get_current_user_optional),
+) -> RedirectResponse:
+    # Clearing the cookie is not enough: a copy of the token would stay valid
+    # until it expires, so the user's token_version is bumped as well.
+    if current_user:
+        await bump_token_version(db, current_user["id"])
+        security_log.info("logout user_id=%s", current_user["id"])
     resp = _redirect("/login")
     resp.delete_cookie(
         "access_token",
@@ -284,6 +336,7 @@ async def admin_users_page(
         return denied
     users = await list_users(db)
     return templates.TemplateResponse(
+        request,
         "admin_users.html",
         {
             "request": request,
@@ -302,6 +355,7 @@ async def _admin_users_error(
 ) -> HTMLResponse:
     users = await list_users(db)
     return templates.TemplateResponse(
+        request,
         "admin_users.html",
         {
             "request": request,
@@ -329,6 +383,9 @@ async def admin_approve_user(
             request, db, current_user, "Seuls les comptes en attente peuvent être approuvés"
         )
     await set_user_status(db, user_id, STATUS_APPROVED)
+    security_log.info(
+        "admin approve by=%s target=%s", current_user["id"], user_id
+    )
     return _redirect("/admin/users")
 
 
@@ -352,6 +409,7 @@ async def admin_reject_user(
             request, db, current_user, "Seuls les comptes en attente peuvent être refusés"
         )
     await set_user_status(db, user_id, STATUS_REJECTED)
+    security_log.info("admin reject by=%s target=%s", current_user["id"], user_id)
     return _redirect("/admin/users")
 
 
@@ -374,6 +432,89 @@ async def admin_grant_admin(
             "Seuls les comptes approuvés peuvent devenir administrateur",
         )
     await set_user_role(db, user_id, ROLE_ADMIN)
+    security_log.info("admin grant by=%s target=%s", current_user["id"], user_id)
+    return _redirect("/admin/users")
+
+
+@router.post("/admin/users/{user_id}/suspend", response_class=HTMLResponse)
+async def admin_suspend_user(
+    request: Request,
+    user_id: int,
+    db: aiosqlite.Connection = Depends(get_db),
+    current_user: Optional[dict] = Depends(get_current_user_optional),
+) -> HTMLResponse:
+    """Cut off an approved account and every session it currently holds."""
+    denied = _ensure_admin(current_user)
+    if denied:
+        return denied
+    target = await get_user_by_id(db, user_id)
+    if not target or target["id"] == current_user["id"]:
+        return await _admin_users_error(
+            request, db, current_user, "Impossible de suspendre ce compte"
+        )
+    if target["status"] != STATUS_APPROVED:
+        return await _admin_users_error(
+            request, db, current_user, "Seuls les comptes approuvés peuvent être suspendus"
+        )
+    if target["role"] == ROLE_ADMIN and await count_admins(db) <= 1:
+        return await _admin_users_error(
+            request, db, current_user, "Impossible de suspendre le dernier administrateur"
+        )
+    await set_user_status(db, user_id, STATUS_SUSPENDED)
+    security_log.info("admin suspend by=%s target=%s", current_user["id"], user_id)
+    return _redirect("/admin/users")
+
+
+@router.post("/admin/users/{user_id}/restore", response_class=HTMLResponse)
+async def admin_restore_user(
+    request: Request,
+    user_id: int,
+    db: aiosqlite.Connection = Depends(get_db),
+    current_user: Optional[dict] = Depends(get_current_user_optional),
+) -> HTMLResponse:
+    """Give back access to a suspended or rejected account."""
+    denied = _ensure_admin(current_user)
+    if denied:
+        return denied
+    target = await get_user_by_id(db, user_id)
+    if not target or target["status"] not in (STATUS_SUSPENDED, STATUS_REJECTED):
+        return await _admin_users_error(
+            request,
+            db,
+            current_user,
+            "Seuls les comptes suspendus ou refusés peuvent être réactivés",
+        )
+    await set_user_status(db, user_id, STATUS_APPROVED)
+    security_log.info("admin restore by=%s target=%s", current_user["id"], user_id)
+    return _redirect("/admin/users")
+
+
+@router.post("/admin/users/{user_id}/revoke-admin", response_class=HTMLResponse)
+async def admin_revoke_admin(
+    request: Request,
+    user_id: int,
+    db: aiosqlite.Connection = Depends(get_db),
+    current_user: Optional[dict] = Depends(get_current_user_optional),
+) -> HTMLResponse:
+    """Demote an administrator back to a regular user."""
+    denied = _ensure_admin(current_user)
+    if denied:
+        return denied
+    target = await get_user_by_id(db, user_id)
+    if not target or target["role"] != ROLE_ADMIN:
+        return await _admin_users_error(
+            request, db, current_user, "Ce compte n'est pas administrateur"
+        )
+    if target["id"] == current_user["id"]:
+        return await _admin_users_error(
+            request, db, current_user, "Impossible de retirer vos propres droits"
+        )
+    if await count_admins(db) <= 1:
+        return await _admin_users_error(
+            request, db, current_user, "Impossible de retirer le dernier administrateur"
+        )
+    await set_user_role(db, user_id, ROLE_USER)
+    security_log.info("admin revoke by=%s target=%s", current_user["id"], user_id)
     return _redirect("/admin/users")
 
 
@@ -385,9 +526,9 @@ async def admin_grant_admin(
 @router.get("/", response_class=HTMLResponse)
 async def index(
     request: Request,
-    q: Optional[str] = None,
-    tag: Optional[str] = None,
-    page: int = 1,
+    q: Optional[str] = Query(default=None, max_length=200),
+    tag: Optional[str] = Query(default=None, max_length=64),
+    page: int = Query(default=1, ge=1, le=10_000),
     db: aiosqlite.Connection = Depends(get_db),
     current_user: Optional[dict] = Depends(get_current_user_optional),
 ) -> HTMLResponse:
@@ -398,6 +539,7 @@ async def index(
 
     if request.headers.get("HX-Request"):
         return templates.TemplateResponse(
+            request,
             "partials/recipe_list.html",
             {
                 "request": request,
@@ -409,6 +551,7 @@ async def index(
         )
 
     return templates.TemplateResponse(
+        request,
         "index.html",
         {
             "request": request,
@@ -434,6 +577,7 @@ async def new_recipe_page(
     if not current_user:
         return _redirect("/login")
     return templates.TemplateResponse(
+        request,
         "edit.html",
         {
             "request": request,
@@ -466,6 +610,7 @@ async def create_recipe_page(
     title = title.strip()
     if not title:
         return templates.TemplateResponse(
+            request,
             "edit.html",
             {
                 "request": request,
@@ -477,7 +622,9 @@ async def create_recipe_page(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         )
 
-    tag_names = [t.strip().lower() for t in tags_raw.split(",") if t.strip()]
+    tag_names = parse_tags(tags_raw)
+    content = content[:MAX_CONTENT_LENGTH]
+    title = title[:MAX_TITLE_LENGTH]
     recipe_id = str(uuid.uuid4())
     base_slug = slugify(title)
     slug = await _ensure_unique_slug(db, base_slug)
@@ -497,13 +644,13 @@ async def create_recipe_page(
             recipe_id,
             slug,
             title,
-            summary.strip(),
+            clamp(summary, MAX_SUMMARY_LENGTH),
             current_user["id"],
             cover,
-            prep_time.strip(),
-            cook_time.strip(),
-            wait_time.strip(),
-            servings.strip(),
+            clamp(prep_time, MAX_META_LENGTH),
+            clamp(cook_time, MAX_META_LENGTH),
+            clamp(wait_time, MAX_META_LENGTH),
+            clamp(servings, MAX_META_LENGTH),
         ),
     )
     await _upsert_tags(db, recipe_id, tag_names)
@@ -546,6 +693,7 @@ async def recipe_detail(
     images = gallery_filenames(slug, raw, recipe.cover_image)
 
     return templates.TemplateResponse(
+        request,
         "recipe.html",
         {
             "request": request,
@@ -595,6 +743,7 @@ async def edit_recipe_page(
     recipe = _row_to_out(row, tags)
 
     return templates.TemplateResponse(
+        request,
         "edit.html",
         {
             "request": request,
@@ -637,8 +786,9 @@ async def update_recipe_page(
         raise HTTPException(status.HTTP_403_FORBIDDEN)
 
     recipe_id = row["id"]
-    title = title.strip()
-    tag_names = [t.strip().lower() for t in tags_raw.split(",") if t.strip()]
+    title = title.strip()[:MAX_TITLE_LENGTH]
+    tag_names = parse_tags(tags_raw)
+    content = content[:MAX_CONTENT_LENGTH]
 
     write_recipe_content(slug, content)
 
@@ -651,11 +801,11 @@ async def update_recipe_page(
         """,
         (
             title,
-            summary.strip(),
-            prep_time.strip(),
-            cook_time.strip(),
-            wait_time.strip(),
-            servings.strip(),
+            clamp(summary, MAX_SUMMARY_LENGTH),
+            clamp(prep_time, MAX_META_LENGTH),
+            clamp(cook_time, MAX_META_LENGTH),
+            clamp(wait_time, MAX_META_LENGTH),
+            clamp(servings, MAX_META_LENGTH),
             recipe_id,
         ),
     )
@@ -799,7 +949,7 @@ async def delete_image_page(
 
 @router.post("/partials/preview", response_class=HTMLResponse)
 async def markdown_preview(
-    content: str = Form(default=""),
+    content: str = Form(default="", max_length=MAX_CONTENT_LENGTH),
     slug: str = Form(default="__preview__"),
     current_user: Optional[dict] = Depends(get_current_user_optional),
 ) -> HTMLResponse:
@@ -834,6 +984,7 @@ async def _image_list_response(
         row = await cur.fetchone()
     cover = (row["cover_image"] if row else "") or ""
     return templates.TemplateResponse(
+        request,
         "partials/image_list.html",
         {
             "request": request,
@@ -851,7 +1002,7 @@ async def _fetch_recipes(
     page: int = 1,
     page_size: int = 24,
 ) -> list[RecipeOut]:
-    offset = (page - 1) * page_size
+    offset = max(page - 1, 0) * page_size
     rows = []
 
     if q:

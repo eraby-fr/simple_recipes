@@ -14,10 +14,21 @@ def test_html_logout_takes_no_response_parameter():
     assert "response" not in signature(logout).parameters
 
 
+def _iter_routes(routes):
+    """Walk app.routes recursively: FastAPI nests included routers since 0.117."""
+    for route in routes:
+        yield route
+        nested = getattr(route, "routes", None)
+        if nested is None:
+            nested = getattr(getattr(route, "original_router", None), "routes", None)
+        if nested:
+            yield from _iter_routes(nested)
+
+
 def test_html_logout_route_has_no_required_query_params():
     route = next(
         r
-        for r in app.routes
+        for r in _iter_routes(app.routes)
         if getattr(r, "path", None) == "/logout" and "POST" in getattr(r, "methods", set())
     )
     assert route.dependant.query_params == []

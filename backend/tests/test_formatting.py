@@ -37,20 +37,25 @@ class TestFormatDateFr:
         assert format_date_fr(datetime(2024, 1, 3)) == "3 janvier 2024"
 
 
+# Minimal valid JPEG signature: save_image now rejects anything that does not
+# look like an image, so the fixtures must carry a real magic number.
+JPEG_BYTES = b"\xff\xd8\xff\xe0" + b"\x00" * 16
+
+
 class TestCoverAndGallery:
     def test_preferred_cover_used_when_present(self):
         slug = _slug()
         write_recipe_content(slug, "# Tatin")
-        save_image(slug, "caramel.jpg", b"aaa")
-        save_image(slug, "montage_pomme.jpg", b"bbb")
+        save_image(slug, "caramel.jpg", JPEG_BYTES)
+        save_image(slug, "montage_pomme.jpg", JPEG_BYTES)
         url = get_cover_image_url(slug, "montage_pomme.jpg")
         assert url == f"/uploads/{slug}/images/montage_pomme.jpg"
 
     def test_cover_falls_back_to_first_sorted_name(self):
         slug = _slug()
         write_recipe_content(slug, "# x")
-        save_image(slug, "z.jpg", b"z")
-        save_image(slug, "a.jpg", b"a")
+        save_image(slug, "z.jpg", JPEG_BYTES)
+        save_image(slug, "a.jpg", JPEG_BYTES)
         url = get_cover_image_url(slug, "missing.jpg")
         assert url == f"/uploads/{slug}/images/a.jpg"
 
@@ -58,8 +63,8 @@ class TestCoverAndGallery:
         slug = _slug()
         content = "Hello ![x](images/inline.jpg) more"
         write_recipe_content(slug, content)
-        save_image(slug, "cover.jpg", b"c")
-        save_image(slug, "inline.jpg", b"i")
-        save_image(slug, "extra.jpg", b"e")
+        save_image(slug, "cover.jpg", JPEG_BYTES)
+        save_image(slug, "inline.jpg", JPEG_BYTES)
+        save_image(slug, "extra.jpg", JPEG_BYTES)
         names = gallery_filenames(slug, content, "cover.jpg")
         assert names == ["extra.jpg"]

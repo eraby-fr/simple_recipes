@@ -1,4 +1,4 @@
-.PHONY: help build up down logs shell clean env dev test
+.PHONY: help build up down logs shell clean env dev test audit
 
 ## ── Variables ───────────────────────────────────────────────────────────────
 IMAGE  := simple-recipes
@@ -44,23 +44,33 @@ clean: ## Remove the built image
 restart: down up ## Restart the service
 
 ## ── Local development (no Docker) ───────────────────────────────────────────
-dev-assets: ## Download HTMX and Pico.css for local development
+HTMX_SHA256 := 491955cd1810747d7d7b9ccb936400afb760e06d25d53e4572b64b6563b2784e
+PICO_SHA256 := dd5fd5591afd81ee21dcc117ad85c014dc3f1f19dc2d7b7d101ea0acc29274c2
+
+dev-assets: ## Download HTMX and Pico.css for local development (digest-checked)
 	@mkdir -p backend/static/js backend/static/css
 	@curl -fsSL -o backend/static/js/htmx.min.js \
 		https://unpkg.com/htmx.org@2.0.3/dist/htmx.min.js
+	@echo "$(HTMX_SHA256)  backend/static/js/htmx.min.js" | sha256sum -c -
 	@curl -fsSL -o backend/static/css/pico.min.css \
 		https://unpkg.com/@picocss/pico@2.0.6/css/pico.min.css
-	@echo "✓ Frontend assets downloaded."
+	@echo "$(PICO_SHA256)  backend/static/css/pico.min.css" | sha256sum -c -
+	@echo "✓ Frontend assets downloaded and verified."
 
 test: ## Run unit tests locally (requires Python 3.12+)
 	@cd backend && \
-		pip install -r requirements.txt pytest -q && \
+		pip install -r requirements-dev.txt -q && \
 		PYTHONPATH=. DATA_DIR=/tmp/simple-recipes-test \
-		SECRET_KEY=test-secret-key-local COOKIE_SECURE=false \
+		SECRET_KEY=test-secret-key-local-at-least-32-chars COOKIE_SECURE=false \
 		pytest tests/ -v
 
 dev: dev-assets ## Run locally without Docker (requires Python 3.12+)
 	@cd backend && \
 		pip install -r requirements.txt -q && \
-		DATA_DIR=../data SECRET_KEY=dev-secret COOKIE_SECURE=false \
-		uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+		DATA_DIR=../data SECRET_KEY=dev-secret-key-not-for-production-32c \
+		COOKIE_SECURE=false ENABLE_DOCS=true \
+		uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+
+audit: ## Scan the pinned dependencies for known vulnerabilities
+	@pip install pip-audit -q
+	@cd backend && pip-audit -r requirements.txt --strict

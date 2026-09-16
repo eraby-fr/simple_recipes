@@ -1,0 +1,9 @@
+# Test-only dependencies for the unit test suite (backend/tests/).
+# The runtime requirements live in requirements.txt.
+-r requirements.txt
+
+pytest==9.1.1
+
+# starlette.testclient needs an HTTP client to drive the ASGI app in-process.
+# Starlette 1.x asks for httpx2 and raises at import time when it is missing.
+httpx2==2.13.0
