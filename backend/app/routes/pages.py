@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from typing import Optional
 
 import uuid
@@ -39,6 +38,7 @@ from app.routes.api_recipes import (
     _store_uploads,
     _upsert_fts,
     _upsert_tags,
+    build_fts_match_query,
 )
 from app.schemas import RecipeOut
 from app.storage import (
@@ -855,8 +855,8 @@ async def _fetch_recipes(
     rows = []
 
     if q:
-        escaped = re.sub(r'["\*\(\)\:\^~]', " ", q).strip()
-        if escaped:
+        match_query = build_fts_match_query(q)
+        if match_query:
             async with db.execute(
                 """
                 SELECT r.*, u.username AS author_username
@@ -867,7 +867,7 @@ async def _fetch_recipes(
                 ORDER BY rank
                 LIMIT ? OFFSET ?
                 """,
-                (escaped + "*", page_size, offset),
+                (match_query, page_size, offset),
             ) as cur:
                 rows = await cur.fetchall()
     elif tag:
