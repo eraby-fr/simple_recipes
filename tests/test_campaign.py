@@ -231,7 +231,7 @@ class TestCampaign:
         page1.fill("#password", USER1["password"])
         page1.click("button[type='submit']")
         page1.wait_for_url(f"{base_url}/", timeout=10_000)
-        expect(page1.locator("nav")).to_contain_text(USER1["username"])
+        expect(page1.locator(".site-header nav")).to_contain_text(USER1["username"])
         expect(page1.get_by_role("button", name="Nouvelle recette")).to_be_visible()
         expect(page1.get_by_role("link", name="Comptes")).to_be_visible()
 
@@ -248,7 +248,7 @@ class TestCampaign:
         page2.fill("#password", USER2["password"])
         page2.click("button[type='submit']")
         page2.wait_for_url(f"{base_url}/", timeout=10_000)
-        expect(page2.locator("nav")).to_contain_text(USER2["username"])
+        expect(page2.locator(".site-header nav")).to_contain_text(USER2["username"])
 
     # ════════════════════════════════════════════════════════════════════════
     # Phase 3 — Création (C) — 10 recettes
@@ -434,7 +434,7 @@ class TestCampaign:
         expect(image_list).to_contain_text("test_photo.png", timeout=8_000)
         _STATE["uploaded_image"] = "test_photo.png"
 
-def test_17_image_visible_on_detail_page(self, page1: Page, base_url: str) -> None:
+    def test_17_image_visible_on_detail_page(self, page1: Page, base_url: str) -> None:
         """The uploaded image is shown as the recipe cover."""
         slug = _STATE["user1_slugs"][2]
         page1.goto(f"{base_url}/recipes/{slug}")
@@ -548,7 +548,7 @@ def test_17_image_visible_on_detail_page(self, page1: Page, base_url: str) -> No
         page1.fill("#password", USER1["password"])
         page1.click("button[type='submit']")
         page1.wait_for_url(f"{base_url}/", timeout=8_000)
-        expect(page1.locator("nav")).to_contain_text(USER1["username"])
+        expect(page1.locator(".site-header nav")).to_contain_text(USER1["username"])
 
     def test_28_unauthenticated_recipe_detail_redirects_to_login(
         self, page2: Page, base_url: str
