@@ -26,6 +26,9 @@ backend/static/css/pico.min.css
 *.swp
 *.swo
 
+# Claude Code handover notes (local only)
+CLAUDE.md
+
 # OS
 .DS_Store
 Thumbs.db
