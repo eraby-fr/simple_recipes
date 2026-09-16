@@ -31,7 +31,7 @@
       hx-get="/"
       hx-target="#recipe-list"
       hx-push-url="true"
-      onclick="setTagFilter('', this)"
+      data-tag=""
     >Toutes</button>
     {% for t in all_tags %}
     <button
@@ -40,7 +40,7 @@
       hx-get="/?tag={{ t | urlencode }}"
       hx-target="#recipe-list"
       hx-push-url="true"
-      onclick="setTagFilter('{{ t }}', this)"
+      data-tag="{{ t }}"
     >{{ t }}</button>
     {% endfor %}
   </div>
@@ -53,11 +53,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-  function setTagFilter(tag, btn) {
-    document.getElementById('tag_filter').value = tag;
-    document.querySelectorAll('.tag-btn').forEach(b => b.classList.remove('active'));
-    if (btn) btn.classList.add('active');
-  }
-</script>
+<script src="/static/js/home.js"></script>
 {% endblock %}

@@ -40,7 +40,7 @@ make test
 cd backend
 pip install -r requirements.txt pytest -q
 PYTHONPATH=. DATA_DIR=/tmp/simple-recipes-test \
-  SECRET_KEY=test-secret-key-local COOKIE_SECURE=false \
+  SECRET_KEY=test-secret-key-local-at-least-32-chars COOKIE_SECURE=false \
   pytest tests/ -v
 ```
 
@@ -50,7 +50,7 @@ PYTHONPATH=. DATA_DIR=/tmp/simple-recipes-test \
 |----------|-----------------|------|
 | `PYTHONPATH` | `.` (from `backend/`) | Enables `app.*` imports |
 | `DATA_DIR` | `/tmp/simple-recipes-test` | Isolated data directory |
-| `SECRET_KEY` | `test-secret-key-local` | Test JWT key |
+| `SECRET_KEY` | `test-secret-key-local-at-least-32-chars` | Test JWT key (32 characters minimum, enforced at startup) |
 | `COOKIE_SECURE` | `false` | Disables `Secure` flag on cookies (local HTTP) |
 
 ### Continuous integration (GitHub Actions)
@@ -173,3 +173,17 @@ make up            # Start via Docker Compose (production-like)
 # E2E tests (Docker required)
 pytest tests/test_campaign.py -v --browser chromium -p no:randomly
 ```
+
+---
+
+## Dependency audit
+
+The pinned requirements are scanned for known vulnerabilities on every push, and
+can be checked locally:
+
+```bash
+make audit
+```
+
+It runs `pip-audit -r backend/requirements.txt --strict` and fails on any
+advisory, so a vulnerable pin cannot reach `main` unnoticed.

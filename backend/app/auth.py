@@ -13,13 +13,27 @@ from app.database import get_db
 from app.schemas import TokenData
 from app.users import STATUS_APPROVED
 
+# bcrypt only considers the first 72 bytes of a password. Recent releases raise
+# ValueError instead of truncating silently, which would turn /login and
+# /register into 500s, so the truncation is done here explicitly.
+BCRYPT_MAX_BYTES = 72
+
+
+def _bcrypt_bytes(password: str) -> bytes:
+    """Encode a password and truncate it to what bcrypt actually hashes."""
+    return password.encode("utf-8")[:BCRYPT_MAX_BYTES]
+
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return bcrypt.checkpw(plain_password.encode(), hashed_password.encode())
+    try:
+        return bcrypt.checkpw(_bcrypt_bytes(plain_password), hashed_password.encode())
+    except ValueError:
+        # Malformed hash stored in the database.
+        return False
 
 
 def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    return bcrypt.hashpw(_bcrypt_bytes(password), bcrypt.gensalt()).decode()
 
 
 def create_access_token(
@@ -31,19 +45,27 @@ def create_access_token(
         expires_delta or timedelta(minutes=settings.access_token_expire_minutes)
     )
     to_encode["exp"] = expire
+    to_encode["iat"] = datetime.now(timezone.utc)
     return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
 
 
 def decode_token(token: str) -> Optional[TokenData]:
     try:
         payload = jwt.decode(
-            token, settings.secret_key, algorithms=[settings.algorithm]
+            token,
+            settings.secret_key,
+            algorithms=[settings.algorithm],
+            options={"require": ["exp", "sub"]},
         )
         sub: Optional[str] = payload.get("sub")
         username: Optional[str] = payload.get("username")
         if sub is None or username is None:
             return None
-        return TokenData(user_id=int(sub), username=username)
+        return TokenData(
+            user_id=int(sub),
+            username=username,
+            token_version=int(payload.get("ver", 0)),
+        )
     except (jwt.PyJWTError, ValueError):
         return None
 
@@ -58,7 +80,7 @@ async def get_current_user_optional(
     if token_data is None:
         return None
     async with db.execute(
-        "SELECT id, username, role, status FROM users WHERE id = ?",
+        "SELECT id, username, role, status, token_version FROM users WHERE id = ?",
         (token_data.user_id,),
     ) as cursor:
         row = await cursor.fetchone()
@@ -66,6 +88,10 @@ async def get_current_user_optional(
         return None
     user = dict(row)
     if user.get("status") != STATUS_APPROVED:
+        return None
+    # Logout, suspension and role changes bump token_version, which invalidates
+    # every token issued before them.
+    if int(user.get("token_version") or 0) != token_data.token_version:
         return None
     return user
 

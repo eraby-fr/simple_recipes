@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
     hashed_password TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'user',
     status TEXT NOT NULL DEFAULT 'pending',
+    token_version INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -65,6 +66,10 @@ async def _migrate_user_roles(db: aiosqlite.Connection) -> None:
     if "status" not in columns:
         await db.execute(
             "ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'"
+        )
+    if "token_version" not in columns:
+        await db.execute(
+            "ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0"
         )
 
     async with db.execute(

@@ -90,7 +90,10 @@ sudo systemctl start simple-recipes
 sudo systemctl status simple-recipes
 ```
 
-The application is now accessible at `http://<server-ip>:8080` and will restart automatically after every reboot.
+The application now listens on `127.0.0.1:8080` and will restart automatically
+after every reboot. It is deliberately **not** reachable from the network
+directly: all traffic goes through the Nginx reverse proxy configured below, so
+the session cookie is never sent over plain HTTP.
 
 ---
 
@@ -115,7 +118,10 @@ server {
 
         proxy_set_header   Host              $host;
         proxy_set_header   X-Real-IP         $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        # $remote_addr, not $proxy_add_x_forwarded_for: a client-supplied
+        # X-Forwarded-For must never reach the application, or anyone could
+        # spoof their IP and defeat the login rate limiter.
+        proxy_set_header   X-Forwarded-For   $remote_addr;
         proxy_set_header   X-Forwarded-Proto $scheme;
 
         proxy_read_timeout 60s;
@@ -167,13 +173,20 @@ server {
     include             /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam         /etc/letsencrypt/ssl-dhparams.pem;
 
+    # Tell browsers to never speak plain HTTP to this host again.
+    # Add "; preload" only once you are sure every subdomain serves HTTPS.
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
     location / {
         proxy_pass         http://127.0.0.1:8080;
         proxy_http_version 1.1;
 
         proxy_set_header   Host              $host;
         proxy_set_header   X-Real-IP         $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        # $remote_addr, not $proxy_add_x_forwarded_for: a client-supplied
+        # X-Forwarded-For must never reach the application, or anyone could
+        # spoof their IP and defeat the login rate limiter.
+        proxy_set_header   X-Forwarded-For   $remote_addr;
         proxy_set_header   X-Forwarded-Proto $scheme;
 
         proxy_read_timeout 60s;
@@ -184,12 +197,29 @@ server {
 }
 ```
 
-### Cookie security
+### Security settings
 
-When behind HTTPS, enable the `Secure` flag on the session cookie by updating `.env`:
+Review these `.env` values before going live:
 
 ```env
+# Required, at least 32 characters. The application refuses to start otherwise.
+# Generate one with:
+#   python3 -c 'import secrets; print(secrets.token_urlsafe(48))'
+SECRET_KEY=<a-long-random-value>
+
+# Adds the Secure flag to the session cookie and sends HSTS. Keep it true
+# behind HTTPS.
 COOKIE_SECURE=true
+
+# Reject requests whose Host header is not yours.
+ALLOWED_HOSTS=recipes.example.com
+
+# Keep the API documentation closed to anonymous visitors.
+ENABLE_DOCS=false
+
+# The Docker network the reverse proxy reaches the container from. uvicorn
+# only honours X-Forwarded-For coming from these addresses. Never use "*".
+FORWARDED_ALLOW_IPS=172.16.0.0/12
 ```
 
 Then restart the service:
@@ -225,3 +255,20 @@ sudo systemctl status  simple-recipes   # Status
 sudo journalctl -u simple-recipes -f    # Live logs
 sudo -u recipes docker compose -f /opt/simple-recipes/docker-compose.yml logs -f  # App logs
 ```
+
+---
+
+## 7. Keeping the deployment secure
+
+- **Dependencies.** `make audit` runs `pip-audit` against the pinned
+  requirements; CI runs the same check on every push. Rebuild and redeploy when
+  it reports a fix.
+- **Backups.** Everything lives in the bind-mounted data directory: the SQLite
+  database under `db/` and one folder per recipe under `recipes/`. Back up the
+  whole directory; it contains password hashes, so protect it accordingly.
+- **Accounts.** The first account to register becomes administrator. Approve new
+  accounts from `/admin/users`, and use **Suspendre** there to cut off a
+  compromised account — it invalidates that user's live sessions immediately.
+- **Static assets.** `/static/js/*.js` and `/static/css/*.css` are served
+  without cache busting. After deploying a new version, hard-reload once (or add
+  a version query string) so browsers do not mix new HTML with old JavaScript.

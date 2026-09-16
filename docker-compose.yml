@@ -7,7 +7,9 @@ services:
     container_name: simple-recipes
     restart: unless-stopped
     ports:
-      - "${PORT:-8080}:8000"
+      # Bound to the loopback interface: the app is reached through the reverse
+      # proxy, never directly over plain HTTP from the network.
+      - "127.0.0.1:${PORT:-8080}:8000"
     volumes:
       # Bind-mount your recipe data directory here.
       # Change ./data to any absolute path on your host, e.g.:
@@ -17,8 +19,11 @@ services:
       DATA_DIR: /app/data
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set in .env}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-*}
+      ENABLE_DOCS: ${ENABLE_DOCS:-false}
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-172.16.0.0/12}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/docs"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
       interval: 30s
       timeout: 5s
       retries: 3

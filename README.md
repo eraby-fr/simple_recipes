@@ -21,10 +21,14 @@ Open → **http://localhost:8080** (port configurable in `.env`).
 
 Edit the `.env` file:
 
-| Variable     | Default  | Description                              |
-|--------------|----------|------------------------------------------|
-| `PORT`       | `8080`   | Port exposed on the host                 |
-| `SECRET_KEY` | *(auto)* | JWT secret key — **do not share**        |
+| Variable              | Default          | Description |
+|-----------------------|------------------|-------------|
+| `PORT`                | `8080`           | Port exposed on the host (bound to `127.0.0.1`) |
+| `SECRET_KEY`          | *(auto)*         | JWT secret key, 32 characters minimum — **do not share**. The application refuses to start with the default or a shorter value |
+| `COOKIE_SECURE`       | `true`           | `Secure` flag on the session cookie plus HSTS. Set to `false` only for local HTTP |
+| `ALLOWED_HOSTS`       | `*`              | Comma-separated `Host` header allow-list. `*` disables the check |
+| `ENABLE_DOCS`         | `false`          | Expose `/api/docs`, `/api/redoc` and `/openapi.json` |
+| `FORWARDED_ALLOW_IPS` | `172.16.0.0/12`  | Networks uvicorn accepts `X-Forwarded-For` from. Never set this to `*` |
 
 ### Changing the data directory
 
@@ -91,7 +95,7 @@ pip install -r requirements.txt pytest
 
 PYTHONPATH=. \
 DATA_DIR=/tmp/simple-recipes-test \
-SECRET_KEY=test-secret-key-local \
+SECRET_KEY=test-secret-key-local-at-least-32-chars \
 COOKIE_SECURE=false \
 pytest tests/ -v
 ```
@@ -109,7 +113,10 @@ pytest tests/ -v
 
 ## API
 
-Interactive documentation is available at `/api/docs` (Swagger UI) once the service is running.
+Interactive documentation is available at `/api/docs` (Swagger UI), but it is
+**disabled by default** because it describes the whole API to anonymous
+visitors. Set `ENABLE_DOCS=true` in `.env` to turn it on, and keep it off in
+production.
 
 ## Documentation
 

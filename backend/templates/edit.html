@@ -121,13 +121,13 @@
         <div class="editor-pane-header">
           <span>Markdown</span>
           <div class="editor-toolbar">
-            <button type="button" class="toolbar-btn" onclick="insertMarkdown('**', '**')" title="Gras" aria-label="Gras"><strong>B</strong></button>
-            <button type="button" class="toolbar-btn" onclick="insertMarkdown('*', '*')" title="Italique" aria-label="Italique"><em>I</em></button>
-            <button type="button" class="toolbar-btn" onclick="insertHeading()" title="Titre" aria-label="Titre">H</button>
-            <button type="button" class="toolbar-btn" onclick="insertMarkdown('\n- ', '')" title="Liste" aria-label="Liste">≡</button>
-            <button type="button" class="toolbar-btn" onclick="insertMarkdown('\n1. ', '')" title="Liste numérotée" aria-label="Liste numérotée">1.</button>
+            <button type="button" class="toolbar-btn" data-action="wrap" data-before="**" data-after="**" title="Gras" aria-label="Gras"><strong>B</strong></button>
+            <button type="button" class="toolbar-btn" data-action="wrap" data-before="*" data-after="*" title="Italique" aria-label="Italique"><em>I</em></button>
+            <button type="button" class="toolbar-btn" data-action="heading" title="Titre" aria-label="Titre">H</button>
+            <button type="button" class="toolbar-btn" data-action="wrap" data-before="&#10;- " data-after="" title="Liste" aria-label="Liste">≡</button>
+            <button type="button" class="toolbar-btn" data-action="wrap" data-before="&#10;1. " data-after="" title="Liste numérotée" aria-label="Liste numérotée">1.</button>
             <span class="toolbar-sep" aria-hidden="true"></span>
-            <button type="button" class="toolbar-btn" id="toggle-preview-btn" onclick="togglePreview()" title="Plein écran éditeur / aperçu" aria-label="Basculer l'aperçu">⇔</button>
+            <button type="button" class="toolbar-btn" id="toggle-preview-btn" data-action="toggle-preview" title="Plein écran éditeur / aperçu" aria-label="Basculer l'aperçu">⇔</button>
           </div>
         </div>
         <textarea

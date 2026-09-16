@@ -295,4 +295,35 @@
   function escapeRegExp(str) {
     return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
+
+  // ---------------------------------------------------------------------------
+  // Delegated event handlers
+  //
+  // Every button declares what it does through data-* attributes instead of an
+  // inline onclick, which lets the Content-Security-Policy drop 'unsafe-inline'
+  // from script-src. Delegation on document also survives the htmx swaps that
+  // re-render the image list.
+  // ---------------------------------------------------------------------------
+  document.addEventListener("click", function (event) {
+    const toolbarBtn = event.target.closest(".toolbar-btn[data-action]");
+    if (toolbarBtn) {
+      const action = toolbarBtn.dataset.action;
+      if (action === "wrap") {
+        window.insertMarkdown(
+          toolbarBtn.dataset.before || "",
+          toolbarBtn.dataset.after || ""
+        );
+      } else if (action === "heading") {
+        window.insertHeading();
+      } else if (action === "toggle-preview") {
+        window.togglePreview();
+      }
+      return;
+    }
+
+    const copyBtn = event.target.closest(".copy-link-btn[data-filename]");
+    if (copyBtn) {
+      window.copyMarkdownLink(copyBtn.dataset.filename, copyBtn);
+    }
+  });
 })();
